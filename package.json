@@ -1,0 +1,34 @@
+{
+  "name": "gold-terminal",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.ts",
+    "build": "vite build",
+    "start": "node server.ts"
+  },
+  "dependencies": {
+    "@google/genai": "latest",
+    "express": "^4.19.2",
+    "dotenv": "^16.4.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "lucide-react": "^0.395.0",
+    "recharts": "^2.12.7",
+    "d3": "^7.9.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@types/express": "latest",
+    "@types/d3": "latest",
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "latest",
+    "tailwindcss": "^3.4.3",
+    "postcss": "^8.4.38",
+    "autoprefixer": "^10.4.19"
+  }
+}
