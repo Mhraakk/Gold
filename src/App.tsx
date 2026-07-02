@@ -62,6 +62,7 @@ import {
 } from "lucide-react";
 
 import LoginScreen from "./components/LoginScreen";
+import { Analytics } from "@vercel/analytics/react";
 
 export default function App() {
   const [user, setUser] = useState<{ name: string; email: string } | null>(() => {
@@ -2891,6 +2892,7 @@ Provide high-confidence trade targets. Write beautiful structured reports.`,
         </div>
       </footer>
 
+      <Analytics />
     </div>
   );
 }

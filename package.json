@@ -9,26 +9,27 @@
   },
   "dependencies": {
     "@google/genai": "latest",
-    "express": "^4.19.2",
+    "@vercel/analytics": "^2.0.1",
+    "clsx": "^2.1.1",
+    "d3": "^7.9.0",
     "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "lucide-react": "^0.395.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "lucide-react": "^0.395.0",
     "recharts": "^2.12.7",
-    "d3": "^7.9.0",
-    "clsx": "^2.1.1",
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {
+    "@types/d3": "latest",
+    "@types/express": "latest",
     "@types/react": "latest",
     "@types/react-dom": "latest",
-    "@types/express": "latest",
-    "@types/d3": "latest",
     "@vitejs/plugin-react": "latest",
-    "vite": "latest",
-    "typescript": "latest",
-    "tailwindcss": "^3.4.3",
+    "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
-    "autoprefixer": "^10.4.19"
+    "tailwindcss": "^3.4.3",
+    "typescript": "latest",
+    "vite": "latest"
   }
 }
