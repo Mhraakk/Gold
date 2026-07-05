@@ -1,6 +1,6 @@
 {
-  "name": "Gold Terminal",
-  "description": "Institutional Gold Terminal with real-time Tehran Bazaar, spot rates, and quantitative indicators.",
+  "name": "Gold Terminal Pro",
+  "description": "Institutional-grade Gold and FX Terminal for Tehran Market. Real-time quantitative indicators and AI-driven market structure analysis.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

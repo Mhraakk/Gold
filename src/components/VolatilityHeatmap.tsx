@@ -329,7 +329,7 @@ export default function VolatilityHeatmap({
         </div>
 
         {/* Right Side: Volatility Shock Diagnostic Panel (col-span-4) */}
-        <div className="col-span-1 lg:col-span-4 bg-black/40 border border-gray-900 rounded-2xl p-4 flex flex-col justify-between">
+        <div className="col-span-1 lg:col-span-4 bg-[#0a0a0a] border-white/10 lux-card border border-gray-900 rounded-2xl p-4 flex flex-col justify-between">
           
           {selectedItem ? (
             <div className="space-y-4">
@@ -344,28 +344,28 @@ export default function VolatilityHeatmap({
 
               {/* Volatility Metrics Stack */}
               <div className="space-y-2.5 text-xs font-mono">
-                <div className="bg-gray-950/40 p-2.5 rounded-lg border border-gray-900 flex justify-between items-center">
+                <div className="bg-black/20 border border-white/5 p-2.5 rounded-lg border border-gray-900 flex justify-between items-center">
                   <span className="text-gray-500">نوسانات ATR (۱۴ روزه)</span>
                   <span className="text-white font-bold text-right">
                     {selectedItem.currentATR.toLocaleString(undefined, { maximumFractionDigits: selectedItem.decimals })}
                   </span>
                 </div>
 
-                <div className="bg-gray-950/40 p-2.5 rounded-lg border border-gray-900 flex justify-between items-center">
+                <div className="bg-black/20 border border-white/5 p-2.5 rounded-lg border border-gray-900 flex justify-between items-center">
                   <span className="text-gray-500">نوسان نسبی</span>
                   <span className="text-white font-bold text-right">
                     {selectedItem.relativeATR.toFixed(3)}%
                   </span>
                 </div>
 
-                <div className="bg-gray-950/40 p-2.5 rounded-lg border border-gray-900 flex justify-between items-center">
+                <div className="bg-black/20 border border-white/5 p-2.5 rounded-lg border border-gray-900 flex justify-between items-center">
                   <span className="text-gray-500">نرخ رشد ATR</span>
                   <span className={`font-extrabold text-right ${selectedItem.atrGrowthPct >= 0 ? "text-rose-400" : "text-blue-400"}`}>
                     {selectedItem.atrGrowthPct >= 0 ? "+" : ""}{selectedItem.atrGrowthPct}%
                   </span>
                 </div>
 
-                <div className="bg-gray-950/40 p-2.5 rounded-lg border border-gray-900 flex justify-between items-center">
+                <div className="bg-black/20 border border-white/5 p-2.5 rounded-lg border border-gray-900 flex justify-between items-center">
                   <span className="text-gray-500">درجه مواجهه با حرارت</span>
                   <span className="text-amber-400 font-extrabold text-right">
                     {selectedItem.heatScore}° سلسیوس

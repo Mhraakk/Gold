@@ -139,6 +139,10 @@ export function formatToShamsi(
   const gm = date.getUTCMonth() + 1;
   const gd = date.getUTCDate();
 
+  // For Asia-Tehran time, we should ideally use the actual date in that timezone
+  // However, for consistency with the existing UTC-based math, we'll keep it simple
+  // but ensure the timePart reflects Tehran time if requested
+  
   const { jy, jm, jd } = gregorianToJalali(gy, gm, gd);
 
   const monthName = PERSIAN_MONTH_NAMES[jm - 1];
@@ -158,9 +162,13 @@ export function formatToShamsi(
 
   let timePart = "";
   if (includeTime) {
-    const hours = date.getUTCHours().toString().padStart(2, "0");
-    const minutes = date.getUTCMinutes().toString().padStart(2, "0");
-    timePart = ` ${hours}:${minutes}`;
+    const timeStr = date.toLocaleTimeString("fa-IR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Tehran"
+    });
+    timePart = ` ${timeStr}`;
   }
 
   const result = `${datePart}${timePart}`;

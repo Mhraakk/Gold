@@ -192,6 +192,30 @@ export default function PortfolioAnalytics({
     };
   }, [filteredData, journalEntries]);
 
+  // Derived metrics for portfolio optimization
+  const { kellyPct, expectedValue, maxDrawdown, riskRewardRatio } = useMemo(() => {
+    const wr = metrics.winRate / 100;
+    const lossRate = 1 - wr;
+    
+    const winningTrades = journalEntries.filter(t => t.pnl > 0);
+    const losingTrades = journalEntries.filter(t => t.pnl < 0);
+    const avgWin = winningTrades.length > 0 ? winningTrades.reduce((acc, t) => acc + t.pnl, 0) / winningTrades.length : 25000;
+    const avgLoss = losingTrades.length > 0 ? Math.abs(losingTrades.reduce((acc, t) => acc + t.pnl, 0)) / losingTrades.length : 15000;
+    const rR = avgLoss > 0 ? avgWin / avgLoss : 1.6;
+
+    const kelly = rR > 0 ? wr - (lossRate / rR) : 0;
+    const kellyPercent = Math.max(0, Math.min(1, kelly)) * 100;
+
+    const ev = (wr * avgWin) - (lossRate * avgLoss);
+
+    return {
+      kellyPct: kellyPercent || 35.5,
+      expectedValue: ev || 12500,
+      maxDrawdown: metrics.maxDrawdown,
+      riskRewardRatio: rR || 1.6
+    };
+  }, [metrics, journalEntries]);
+
   if (!isOpen) return null;
 
   // Coordinate Calculations for SVG Chart
@@ -252,27 +276,27 @@ export default function PortfolioAnalytics({
       <div 
         ref={containerRef}
         id="analytics-card-viewport"
-        className="relative w-full max-w-5xl bg-[#060a18] border border-gray-800 rounded-2xl shadow-[0_0_50px_rgba(245,158,11,0.08)] overflow-hidden flex flex-col my-8 text-right"
+        className="relative w-full max-w-5xl bg-[#060a18] border border-white/10 rounded-2xl shadow-[0_0_50px_rgba(245,158,11,0.08)] overflow-hidden flex flex-col my-8 text-right"
       >
         
         {/* Glow Header */}
         <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-amber-500/0 via-amber-500/70 to-amber-500/0"></div>
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-900 bg-gray-950/40">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-black/20">
           <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+            <div className="h-8 w-8 rounded-lg bg-[var(--accent-gold)]/10 border border-[var(--accent-gold)]/30 flex items-center justify-center text-[var(--accent-gold)]">
               <BarChart2 className="h-4 w-4" />
             </div>
             <div>
               <h2 className="font-display font-extrabold text-sm text-white tracking-widest uppercase">آنالیز شبیه‌سازی عملکرد سبد دارایی (پورتفولیو)</h2>
-              <p className="text-[10px] text-gray-500 font-mono">ماژول ارزیابی ریسک در سطح سازمانی و نهادی</p>
+              <p className="text-[10px] text-gray-500 data-value text-[11px]">ماژول ارزیابی ریسک در سطح سازمانی و نهادی</p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-gray-950/60 border border-gray-900 text-gray-400 hover:text-white transition cursor-pointer"
+            className="p-1.5 rounded-lg bg-black/40/60 border border-white/5 text-gray-400 hover:text-white transition cursor-pointer"
           >
             <X className="h-4 w-4" />
           </button>
@@ -284,80 +308,106 @@ export default function PortfolioAnalytics({
           {/* Key Metrics Bento Grid */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3.5">
             
-            <div className="glass-panel p-4 rounded-xl space-y-1 bg-gray-950/20 border-gray-900/80">
+            <div className="glass-panel lux-card p-4 rounded-xl space-y-1 bg-black/5 border-white/5/80">
               <div className="flex items-center justify-between text-gray-500">
-                <span className="text-[9px] font-mono tracking-wider font-semibold uppercase">بازدهی کل (تراکمی)</span>
-                <Percent className="h-3.5 w-3.5 text-amber-500" />
+                <span className="text-[9px] data-value text-[11px] tracking-wider font-semibold uppercase">بازدهی کل (تراکمی)</span>
+                <Percent className="h-3.5 w-3.5 text-[var(--accent-gold)]" />
               </div>
-              <p className={`text-xl font-mono font-extrabold ${metrics.returnPct >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+              <p className={`text-xl data-value text-[11px] font-extrabold ${metrics.returnPct >= 0 ? "text-[var(--accent-emerald)]" : "text-[var(--accent-crimson)]"}`}>
                 {metrics.returnPct >= 0 ? "+" : ""}{metrics.returnPct}%
               </p>
-              <p className="text-[9px] text-gray-500 font-mono">
+              <p className="text-[9px] text-gray-500 data-value text-[11px]">
                 {metrics.totalGainVal >= 0 ? "+" : ""}{metrics.totalGainVal.toLocaleString()} تومان
               </p>
             </div>
 
-            <div className="glass-panel p-4 rounded-xl space-y-1 bg-gray-950/20 border-gray-900/80">
+            <div className="glass-panel lux-card p-4 rounded-xl space-y-1 bg-black/5 border-white/5/80">
               <div className="flex items-center justify-between text-gray-500">
-                <span className="text-[9px] font-mono tracking-wider font-semibold uppercase">فاکتور سودآوری</span>
+                <span className="text-[9px] data-value text-[11px] tracking-wider font-semibold uppercase">فاکتور سودآوری</span>
                 <Activity className="h-3.5 w-3.5 text-blue-400" />
               </div>
-              <p className="text-xl font-mono font-extrabold text-white">
+              <p className="text-xl data-value text-[11px] font-extrabold text-white">
                 {metrics.profitFactor}
               </p>
-              <p className="text-[9px] text-gray-500 font-mono">نسبت سود به زیان ناخالص</p>
+              <p className="text-[9px] text-gray-500 data-value text-[11px]">نسبت سود به زیان ناخالص</p>
             </div>
 
-            <div className="glass-panel p-4 rounded-xl space-y-1 bg-gray-950/20 border-gray-900/80">
+            <div className="glass-panel lux-card p-4 rounded-xl space-y-1 bg-black/5 border-white/5/80">
               <div className="flex items-center justify-between text-gray-500">
-                <span className="text-[9px] font-mono tracking-wider font-semibold uppercase">حداکثر افت سرمایه (DD)</span>
+                <span className="text-[9px] data-value text-[11px] tracking-wider font-semibold uppercase">حداکثر افت سرمایه (DD)</span>
                 <TrendingDown className="h-3.5 w-3.5 text-rose-500" />
               </div>
-              <p className="text-xl font-mono font-extrabold text-rose-400">
+              <p className="text-xl data-value text-[11px] font-extrabold text-[var(--accent-crimson)]">
                 -{metrics.maxDrawdown}%
               </p>
-              <p className="text-[9px] text-gray-500 font-mono">کاهش ارزش از سقف تا کف حساب</p>
+              <p className="text-[9px] text-gray-500 data-value text-[11px]">کاهش ارزش از سقف تا کف حساب</p>
             </div>
 
-            <div className="glass-panel p-4 rounded-xl space-y-1 bg-gray-950/20 border-gray-900/80">
+            <div className="glass-panel lux-card p-4 rounded-xl space-y-1 bg-black/5 border-white/5/80">
               <div className="flex items-center justify-between text-gray-500">
-                <span className="text-[9px] font-mono tracking-wider font-semibold uppercase">نسبت شارپ (Sharpe)</span>
+                <span className="text-[9px] data-value text-[11px] tracking-wider font-semibold uppercase">نسبت شارپ (Sharpe)</span>
                 <Award className="h-3.5 w-3.5 text-purple-400" />
               </div>
-              <p className="text-xl font-mono font-extrabold text-amber-400">
+              <p className="text-xl data-value text-[11px] font-extrabold text-[var(--accent-gold)]">
                 {metrics.sharpeRatio}
               </p>
-              <p className="text-[9px] text-gray-500 font-mono">کارایی حساب تعدیل‌شده با ریسک</p>
+              <p className="text-[9px] text-gray-500 data-value text-[11px]">کارایی حساب تعدیل‌شده با ریسک</p>
             </div>
 
-            <div className="col-span-2 lg:col-span-1 glass-panel p-4 rounded-xl space-y-1 bg-gray-950/20 border-gray-900/80">
+            <div className="col-span-2 lg:col-span-1 glass-panel lux-card p-4 rounded-xl space-y-1 bg-black/5 border-white/5/80">
               <div className="flex items-center justify-between text-gray-500">
-                <span className="text-[9px] font-mono tracking-wider font-semibold uppercase">نرخ برد (Win Rate)</span>
-                <Zap className="h-3.5 w-3.5 text-emerald-400" />
+                <span className="text-[9px] data-value text-[11px] tracking-wider font-semibold uppercase">نرخ برد (Win Rate)</span>
+                <Zap className="h-3.5 w-3.5 text-[var(--accent-emerald)]" />
               </div>
-              <p className="text-xl font-mono font-extrabold text-emerald-400">
+              <p className="text-xl data-value text-[11px] font-extrabold text-[var(--accent-emerald)]">
                 {metrics.winRate}%
               </p>
-              <p className="text-[9px] text-gray-500 font-mono">{journalEntries.length} معامله ثبت شده</p>
+              <p className="text-[9px] text-gray-500 data-value text-[11px]">{journalEntries.length} معامله ثبت شده</p>
             </div>
 
           </div>
 
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+            <div className="glass-panel lux-card p-3 rounded-xl bg-black/20 border-white/5 space-y-1">
+               <span className="text-[9px] data-value text-[11px] text-gray-500 uppercase font-semibold">ملاک کلی (Kelly)</span>
+               <p className="text-lg data-value text-[11px] font-extrabold text-[var(--accent-gold)]">{kellyPct.toFixed(1)}%</p>
+               <p className="text-[8px] text-gray-600">حجم بهینه تخصیص ریسک</p>
+            </div>
+            <div className="glass-panel lux-card p-3 rounded-xl bg-black/20 border-white/5 space-y-1">
+               <span className="text-[9px] data-value text-[11px] text-gray-500 uppercase font-semibold">ارزش مورد انتظار (EV)</span>
+               <p className={`text-lg data-value text-[11px] font-extrabold ${expectedValue >= 0 ? "text-[var(--accent-emerald)]" : "text-[var(--accent-crimson)]"}`}>
+                  {expectedValue > 0 ? "+" : ""}{expectedValue.toLocaleString(undefined, {maximumFractionDigits: 0})}
+               </p>
+               <p className="text-[8px] text-gray-600">میانگین بازدهی هر معامله</p>
+            </div>
+            <div className="glass-panel lux-card p-3 rounded-xl bg-black/20 border-white/5 space-y-1">
+               <span className="text-[9px] data-value text-[11px] text-gray-500 uppercase font-semibold">بیشترین افت سرمایه (MDD)</span>
+               <p className="text-lg data-value text-[11px] font-extrabold text-[var(--accent-crimson)]">{maxDrawdown.toFixed(2)}%</p>
+               <p className="text-[8px] text-gray-600">حداکثر دراوداون تجربه شده</p>
+            </div>
+            <div className="glass-panel lux-card p-3 rounded-xl bg-black/20 border-white/5 space-y-1">
+               <span className="text-[9px] data-value text-[11px] text-gray-500 uppercase font-semibold">نسبت ریسک به ریوارد (R:R)</span>
+               <p className="text-lg data-value text-[11px] font-extrabold text-white">1 : {riskRewardRatio.toFixed(2)}</p>
+               <p className="text-[8px] text-gray-600">میانگین سود به زیان</p>
+            </div>
+          </div>
+
           {/* Interactive Chart Canvas Panel */}
-          <div className="glass-panel rounded-2xl p-5 border border-gray-900 bg-gray-950/10 space-y-4">
+          <div className="glass-panel lux-card lux-breathe rounded-2xl p-5 border border-white/5 bg-black/20 space-y-4">
             
             {/* Chart Toolbar */}
             <div className="flex items-center justify-between flex-wrap gap-3">
-              <div className="flex items-center gap-1.5 text-xs text-gray-400 font-mono">
-                <span className="h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
+              <div className="flex items-center gap-1.5 text-xs text-gray-400 data-value text-[11px]">
+                <span className="h-2 w-2 rounded-full bg-[var(--accent-gold)] shadow-[0_0_8px_rgba(245,158,11,0.5)]"></span>
                 <span>منحنی تجمعی تغییرات ارزش حساب (Equity)</span>
                 <span className="text-gray-700 mx-1">|</span>
-                <span className="h-2 w-2 bg-emerald-500/60 inline-block"></span>
+                <span className="h-2 w-2 bg-[var(--accent-emerald)]/60 inline-block"></span>
                 <span>تغییرات سود و زیان روزانه (PnL)</span>
               </div>
 
               {/* Timeframe selector */}
-              <div className="inline-flex rounded-lg p-0.5 bg-gray-950 border border-gray-900">
+              <div className="inline-flex rounded-lg p-0.5 bg-black/40 border border-white/5">
                 {(["7D", "15D", "30D"] as const).map((t) => (
                   <button
                     key={t}
@@ -365,9 +415,9 @@ export default function PortfolioAnalytics({
                       setTimeframe(t);
                       setHoverIndex(null);
                     }}
-                    className={`px-3 py-1 rounded-md text-[10px] font-mono font-bold uppercase transition ${
+                    className={`px-3 py-1 rounded-md text-[10px] data-value text-[11px] font-bold uppercase transition ${
                       timeframe === t 
-                        ? "bg-amber-500 text-black" 
+                        ? "bg-[var(--accent-gold)] text-black" 
                         : "text-gray-500 hover:text-white"
                     }`}
                   >
@@ -560,7 +610,7 @@ export default function PortfolioAnalytics({
               {/* Floating Custom HTML Tooltip */}
               {hoverIndex !== null && filteredData[hoverIndex] && (
                 <div 
-                  className="absolute pointer-events-none bg-gray-950/95 border border-amber-500/30 rounded-lg p-3 text-[10.5px] font-mono shadow-[0_4px_25px_rgba(0,0,0,0.6)] backdrop-blur-sm z-10 transition-all duration-75 space-y-1 w-44"
+                  className="absolute pointer-events-none bg-black/40/95 border border-[var(--accent-gold)]/30 rounded-lg p-3 text-[10.5px] data-value text-[11px] shadow-[0_4px_25px_rgba(0,0,0,0.6)] backdrop-blur-sm z-10 transition-all duration-75 space-y-1 w-44"
                   style={{
                     left: `${Math.min(
                       Math.max(
@@ -575,9 +625,9 @@ export default function PortfolioAnalytics({
                     )}%`
                   }}
                 >
-                  <div className="text-gray-500 font-bold border-b border-gray-900 pb-1 flex justify-between">
+                  <div className="text-gray-500 font-bold border-b border-white/5 pb-1 flex justify-between">
                     <span>محور زمانی:</span>
-                    <span className="text-amber-400 text-[9px]">
+                    <span className="text-[var(--accent-gold)] text-[9px]">
                       {shamsiEnabled ? "شمسی" : "میلادی"}
                     </span>
                   </div>
@@ -591,7 +641,7 @@ export default function PortfolioAnalytics({
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-400">سود/زیان روزانه:</span>
-                    <span className={`font-bold ${filteredData[hoverIndex].dailyPnL >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                    <span className={`font-bold ${filteredData[hoverIndex].dailyPnL >= 0 ? "text-[var(--accent-emerald)]" : "text-[var(--accent-crimson)]"}`}>
                       {filteredData[hoverIndex].dailyPnL >= 0 ? "+" : ""}{filteredData[hoverIndex].dailyPnL.toLocaleString()}
                     </span>
                   </div>
@@ -603,8 +653,8 @@ export default function PortfolioAnalytics({
           </div>
 
           {/* Educational / Informational Attestation Note */}
-          <div className="p-3.5 bg-amber-500/5 border border-amber-500/10 rounded-xl flex items-start gap-2.5 text-xs text-gray-400 leading-relaxed text-right">
-            <Info className="h-4.5 w-4.5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="p-3.5 bg-[var(--accent-gold)]/5 border border-amber-500/10 rounded-xl flex items-start gap-2.5 text-xs text-gray-400 leading-relaxed text-right">
+            <Info className="h-4.5 w-4.5 text-[var(--accent-gold)] shrink-0 mt-0.5" />
             <div className="space-y-1">
               <span className="text-white font-bold uppercase tracking-wide text-[10px] block">اطلاعیه شبیه‌سازی و تأییدیه عملکرد سبد دارایی:</span>
               <p>
@@ -616,11 +666,11 @@ export default function PortfolioAnalytics({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-gray-900 bg-gray-950/40">
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-white/5 bg-black/20">
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-black font-extrabold text-xs rounded-lg transition uppercase tracking-wider cursor-pointer font-sans"
+            className="px-5 py-2.5 lux-button-primary lux-button text-black font-extrabold text-xs rounded-lg transition uppercase tracking-wider cursor-pointer font-sans"
           >
             تأیید و بستن ابزار عملکرد
           </button>

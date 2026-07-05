@@ -7,7 +7,7 @@ export interface Candle {
   volume: number;
 }
 
-export type AssetId = "MELTED_GOLD" | "GOLD_18K" | "GOLD_24K" | "COIN_EMAMI" | "COIN_HALF" | "COIN_QUARTER" | "GOLD_GRAM" | "USDIRT" | "USDTIRT" | "XAUUSD" | "GOLD_FUTURES" | "GOLD_CFD" | "GOLD_ETF";
+export type AssetId = "MELTED_GOLD" | "GOLD_18K" | "GOLD_24K" | "MESGHAL" | "COIN_EMAMI" | "COIN_HALF" | "COIN_QUARTER" | "GOLD_GRAM" | "USDIRT" | "USDTIRT" | "XAUUSD" | "GOLD_FUTURES" | "GOLD_CFD" | "GOLD_ETF";
 
 export interface AssetInfo {
   id: AssetId;
@@ -54,6 +54,7 @@ export interface ElliottWaveCount {
 }
 
 export interface MarketStructure {
+  trend: "BULLISH" | "BEARISH" | "NEUTRAL";
   orderBlocks: OrderBlock[];
   fvgs: FairValueGap[];
   waves: ElliottWaveCount[];
@@ -116,17 +117,39 @@ export interface AlertConfig {
   assetId: AssetId;
   condition: "above" | "below";
   value: number;
-  channel: "telegram" | "email" | "webhook" | "discord" | "browser";
-  enabled: boolean;
+  channel?: "telegram" | "email" | "webhook" | "discord" | "browser";
+  enabled?: boolean;
+  type?: "PRICE_ABOVE" | "PRICE_BELOW" | "TREND_CHANGE" | "VOLATILITY_SPIKE";
+  targetValue?: number;
+  active?: boolean;
+  createdAt?: string;
 }
 
 export interface AIProviderConfig {
   provider: "gemini" | "openai" | "claude" | "deepseek" | "grok" | "openrouter" | "custom";
-  apiKey: string;
   model: string;
   temperature: number;
   systemPrompt: string;
+  apiKey: string;
+  apiKeys: Record<string, string>;
   customEndpoint?: string;
+}
+
+export interface APIConnector {
+  id: string;
+  name: string;
+  providerType: 'REST' | 'GraphQL' | 'WebSocket' | 'JSON' | 'CSV' | 'WebScraping' | 'TelegramScraper' | 'Manual';
+  endpoint: string;
+  apiKey: string;
+  apiKeyHeader: string;
+  mappingPrice: string;
+  mappingHigh: string;
+  mappingLow: string;
+  mappingChange: string;
+  mappingVolume: string;
+  isActive: boolean;
+  targetAssetId: AssetId;
+  priority?: 'High' | 'Medium' | 'Low';
 }
 
 export interface AnalysisResponse {
@@ -151,5 +174,43 @@ export interface AnalysisResponse {
     takeProfit2: number;
     riskRewardRatio: number;
   };
+  risks: {
+    political: number;
+    inflation: number;
+    volatility: number;
+    globalImpact: number;
+  };
   detailedAnalysisMarkdown: string;
+}
+
+export type SourceState = 
+  | 'candidate'
+  | 'testing'
+  | 'verified_live'
+  | 'delayed'
+  | 'stale'
+  | 'unavailable'
+  | 'rejected'
+  | 'archived';
+
+export interface WhatsAppSourceAdapter {
+  sourceId: string;
+  sourceName: string;
+  sourceUrl: string;
+  sourceType: 'whatsapp_channel';
+  rawMessageText: string;
+  messageTimestamp: number | null;
+  fetchedAt: number;
+  parsedAsset: string | null;
+  parsedPrice: number | null;
+  explicitUnit: string | null;
+  normalizedIrrValue: number | null;
+  validationStatus: string;
+  freshnessStatus: string;
+  confidenceScore: number;
+  parserVersion: string;
+  sourceHealth: string;
+  status: SourceState;
+  priority: 'high' | 'medium' | 'low';
+  logs: string[];
 }

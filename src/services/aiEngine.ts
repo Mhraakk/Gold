@@ -166,97 +166,29 @@ export async function triggerAIAnalysis(
   customRules?: any[],
   telegramPrice?: number
 ): Promise<AnalysisResponse> {
-  const structure = computeMarketStructure(assetId, candles);
-  const metadata = ASSETS_METADATA[assetId];
-  const lastPrice = candles[candles.length - 1]?.close || 0;
-
   try {
-    const response = await fetch("/api/analyze-market", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        assetId,
-        symbol: metadata.symbol,
-        currentPrice: lastPrice,
-        lastCandles: candles.slice(-20), // Send latest 20 candles for footprint
-        marketStructure: structure,
-        customConfig: config,
-        customRules,
-        telegramPrice,
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || `HTTP ${response.status} failed to parse analysis.`);
+    let res = await fetch("/api/analysis/latest");
+    let data = await res.json();
+    
+    // If no analysis is available or it's a placeholder, try to refresh it
+    if (!data || !data.trend || data.content === "در حال حاضر تحلیلی در دسترس نیست.") {
+        const refreshRes = await fetch("/api/analysis/refresh", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ assetId, currentPrice: telegramPrice || candles[candles.length - 1]?.close || 0 })
+        });
+        if (refreshRes.ok) {
+            data = await refreshRes.json();
+        }
     }
-
-    return await response.json();
+    
+    if (data.error) {
+        throw new Error(data.error);
+    }
+    
+    return data;
   } catch (err: any) {
-    console.error("Trigger AI Analysis Error:", err);
-    
-    // Failover Rule-Based Quantitative Analysis Model if API Keys are missing or error occurs
-    const signals = analyzeTechnicalIndicators(candles);
-    const ruleBased = calculateRuleBasedConfidence(candles, structure, signals);
-    
-    let rulesMd = "";
-    if (customRules && customRules.length > 0) {
-      rulesMd = `\n\n4. **Local Strategy Builder Automation Signals:**\n` + 
-        customRules.map((r: any) => {
-          const trig = r.isTriggered ? "🔴 **TRIGGERED**" : "⚪ WAITING";
-          const conds = `${r.cond1Metric} ${r.cond1Op} ${r.cond1Value}` + 
-            (r.cond2Metric !== "none" ? ` ${r.conditionType.toUpperCase()} ${r.cond2Metric} ${r.cond2Op} ${r.cond2Value}` : "");
-          return `- **${r.name}** [${trig}]: If \`${conds}\` → Signal **${r.actionSignal}**`;
-        }).join("\n");
-    }
-
-    // Formulate a robust rule-based default response
-    const buyZoneStart = structure.supportLines[0] || lastPrice * 0.985;
-    const sellZoneStart = structure.resistanceLines[0] || lastPrice * 1.015;
-
-    return {
-      assetId,
-      timestamp: new Date().toISOString(),
-      trend: signals.momentum === "bullish" ? "BULLISH" : signals.momentum === "bearish" ? "BEARISH" : "CONSOLIDATION",
-      marketPhase: signals.momentum === "bullish" ? "Mark-Up Expansion Phase" : "Consolidation Re-accumulation",
-      confidenceScore: ruleBased.confidenceScore,
-      probabilityScore: ruleBased.probabilityScore,
-      supportLevels: structure.supportLines,
-      resistanceLevels: structure.resistanceLines,
-      orderBlocks: structure.orderBlocks.map(ob => ({
-        type: ob.type,
-        range: `${ob.priceStart.toLocaleString()} - ${ob.priceEnd.toLocaleString()}`,
-        volume: ob.volume.toLocaleString(),
-      })),
-      scenarios: {
-        primary: `قیمت در کانال ساختاری خود به سمت بلوک سفارش اصلی (Order Block) در محدوده ${sellZoneStart.toLocaleString()} حرکت خواهد کرد.`,
-        alternative: `در صورت از دست رفتن حمایت ${buyZoneStart.toLocaleString()}، قیمت برای جمع‌آوری نقدینگی به سطوح پایین‌تر سقوط می‌کند.`,
-        invalidation: `بسته شدن کندل ساعتی زیر سطح حمایتی ${(structure.supportLines[1] || lastPrice * 0.97).toLocaleString()}، سناریوی صعودی را باطل می‌کند.`,
-      },
-      tradeSetup: {
-        entry: parseFloat(lastPrice.toFixed(metadata.decimals)),
-        stopLoss: parseFloat((lastPrice * 0.988).toFixed(metadata.decimals)),
-        takeProfit1: parseFloat((lastPrice * 1.012).toFixed(metadata.decimals)),
-        takeProfit2: parseFloat((lastPrice * 1.025).toFixed(metadata.decimals)),
-        riskRewardRatio: 2.2,
-      },
-      detailedAnalysisMarkdown: `### 🤖 گزارش تحلیل موتور کوانت پشتیبان
-      
-سرور AI به دلیل عدم پیکربندی صحیح کلید API در دسترس نیست. این تحلیل بر اساس موتور محاسبات کوانت داخلی سیستم ارائه شده است:
-
-1. **ساختار پول هوشمند (SMC):**
-   - **اوردربلاک‌ها (OB):** ${structure.orderBlocks.length} ناحیه فعال یافت شد. یک بلوک ${structure.orderBlocks[0]?.type === 'bullish' ? 'صعودی' : 'نزولی'} در محدوده \`[${structure.orderBlocks[0]?.priceStart.toFixed(1)} - ${structure.orderBlocks[0]?.priceEnd.toFixed(1)}]\` تشکیل شده است.
-   - **گپ‌های ارزش منصفانه (FVG):** ${structure.fvgs.length} گپ فعال. این محدوده‌ها به عنوان جاذب‌های نقدینگی عمل می‌کنند.
-   
-2. **اندیکاتورهای ماتریس تکنیکال:**
-   - **شاخص قدرت نسبی (RSI):** \`${signals.rsi}\` (${signals.rsi > 70 ? "اشباع خرید" : signals.rsi < 30 ? "اشباع فروش" : "مومنتوم خنثی"})
-   - **میانگین متحرک نمایی (EMA):** میانگین ۲۰ دوره‌ای در \`${signals.ema20.toLocaleString()}\` و میانگین ۵۰ دوره‌ای در \`${signals.ema50.toLocaleString()}\`. روند فعلی **${signals.ema20 > signals.ema50 ? "صعودی (توسعه)" : "نزولی (اصلاح)"}** ارزیابی می‌شود.
-   - **نوسان‌پذیری ATR:** \`${signals.atr.toLocaleString()}\` - از این مقدار برای تنظیم حجم معاملات و مدیریت ریسک استفاده کنید.
-
-3. **فرضیه امواج الیوت:**
-   - موج ضربه‌ای فعال شناسایی شد. زیرموج‌ها در محدوده برچسب **${structure.waves[structure.waves.length - 1]?.label || "(4)"}** قرار دارند که نشان‌دهنده نقاط شکست کلیدی پیش‌رو است. برای پیش‌بینی‌های عمیق‌تر یادگیری ماشین، کلیدهای API را در تنظیمات وارد کنید!${rulesMd}`,
-    };
+    console.error("AI Analysis Error:", err);
+    throw err;
   }
 }

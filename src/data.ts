@@ -18,9 +18,10 @@ export const getPrice = (id: AssetId) => {
 };
 
 export const ASSETS_METADATA: Record<AssetId, { name: string; persianName: string; symbol: string; decimals: number; unit: string }> = {
-  MELTED_GOLD: { name: "Iranian Melted Gold", persianName: "طلای آب شده ایران", symbol: "MELT_IRT", decimals: 0, unit: "تومان / مثقال" },
+  MELTED_GOLD: { name: "Iranian Melted Gold", persianName: "طلای آب شده ایران", symbol: "MELT_IRT", decimals: 0, unit: "ریال / مثقال" },
   GOLD_18K: { name: "18K Gold Gram", persianName: "طلای آب شده گرمی (۱۸ عیار)", symbol: "GOLD_18K", decimals: 0, unit: "تومان / گرم" },
   GOLD_24K: { name: "24K Gold Gram", persianName: "طلای ۲۴ عیار", symbol: "GOLD_24K", decimals: 0, unit: "تومان / گرم" },
+  MESGHAL: { name: "Gold Mesghal", persianName: "مثقال طلا", symbol: "MESGHAL", decimals: 0, unit: "تومان / مثقال" },
   COIN_EMAMI: { name: "Emami Gold Coin", persianName: "سکه امامی", symbol: "COIN_EMAMI", decimals: 0, unit: "تومان / عدد" },
   COIN_HALF: { name: "Half Gold Coin", persianName: "نیم سکه بهار آزادی", symbol: "COIN_HALF", decimals: 0, unit: "تومان / عدد" },
   COIN_QUARTER: { name: "Quarter Gold Coin", persianName: "ربع سکه بهار آزادی", symbol: "COIN_QUARTER", decimals: 0, unit: "تومان / عدد" },
@@ -196,6 +197,7 @@ export function computeMarketStructure(assetId: AssetId, candles: Candle[]): Mar
   ];
 
   return {
+    trend: "NEUTRAL",
     orderBlocks: orderBlocks.slice(-4), // keep latest 4
     fvgs: fvgs.slice(-4),
     waves,
@@ -207,6 +209,20 @@ export function computeMarketStructure(assetId: AssetId, candles: Candle[]): Mar
 
 export function generateLiveAssets(currentPrices?: Record<AssetId, number>): AssetInfo[] {
   const getAssetPrice = (id: AssetId) => currentPrices?.[id] || getPrice(id);
+  
+  const getChangeNominal = (id: AssetId) => {
+    const current = getAssetPrice(id);
+    const prev = getPrice(id); // fallback/cached price
+    return current - prev;
+  };
+
+  const getChange = (id: AssetId) => {
+    const current = getAssetPrice(id);
+    const prev = getPrice(id);
+    if (!prev) return 0;
+    return parseFloat(((current - prev) / prev * 100).toFixed(2));
+  };
+
   return [
     {
       id: "MELTED_GOLD",
@@ -214,8 +230,8 @@ export function generateLiveAssets(currentPrices?: Record<AssetId, number>): Ass
       persianName: "طلای آب شده ایران",
       symbol: "MELT_IRT",
       currentPrice: getAssetPrice("MELTED_GOLD"),
-      change: 0,
-      changeNominal: 0,
+      change: getChange("MELTED_GOLD"),
+      changeNominal: getChangeNominal("MELTED_GOLD"),
       high24h: getAssetPrice("MELTED_GOLD") * 1.01,
       low24h: getAssetPrice("MELTED_GOLD") * 0.99,
       volume24h: "در حال دریافت...",
@@ -227,8 +243,8 @@ export function generateLiveAssets(currentPrices?: Record<AssetId, number>): Ass
       persianName: "طلای ۱۸ عیار",
       symbol: "GOLD_18K",
       currentPrice: getAssetPrice("GOLD_18K"),
-      change: 0,
-      changeNominal: 0,
+      change: getChange("GOLD_18K"),
+      changeNominal: getChangeNominal("GOLD_18K"),
       high24h: getAssetPrice("GOLD_18K") * 1.01,
       low24h: getAssetPrice("GOLD_18K") * 0.99,
       volume24h: "در حال دریافت...",
@@ -240,10 +256,23 @@ export function generateLiveAssets(currentPrices?: Record<AssetId, number>): Ass
       persianName: "طلای ۲۴ عیار",
       symbol: "GOLD_24K",
       currentPrice: getAssetPrice("GOLD_24K"),
-      change: 0,
-      changeNominal: 0,
+      change: getChange("GOLD_24K"),
+      changeNominal: getChangeNominal("GOLD_24K"),
       high24h: getAssetPrice("GOLD_24K") * 1.01,
       low24h: getAssetPrice("GOLD_24K") * 0.99,
+      volume24h: "در حال دریافت...",
+      provider: "در حال دریافت...",
+    },
+    {
+      id: "MESGHAL",
+      name: "Gold Mesghal",
+      persianName: "مثقال طلا",
+      symbol: "MESGHAL",
+      currentPrice: getAssetPrice("MESGHAL"),
+      change: getChange("MESGHAL"),
+      changeNominal: getChangeNominal("MESGHAL"),
+      high24h: getAssetPrice("MESGHAL") * 1.01,
+      low24h: getAssetPrice("MESGHAL") * 0.99,
       volume24h: "در حال دریافت...",
       provider: "در حال دریافت...",
     },
@@ -380,7 +409,7 @@ export function generateLiveAssets(currentPrices?: Record<AssetId, number>): Ass
   ];
 }
 
-export const MOCK_CALENDAR: CalendarEvent[] = [
+export const MACRO_CALENDAR: CalendarEvent[] = [
   {
     id: "cal_1",
     time: "2026-07-01T15:30:00Z",
@@ -419,7 +448,7 @@ export const MOCK_CALENDAR: CalendarEvent[] = [
   },
 ];
 
-export const MOCK_NEWS: NewsItem[] = [
+export const MARKET_NEWS: NewsItem[] = [
   {
     id: "news_1",
     title: "افزایش شدید تقاضای طلای آب شده در بازار تهران تحت تأثیر تحولات ژئوپلیتیک منطقه",

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { AssetInfo, MarketStructure } from "../types";
-import { Send, Sparkles, Bot, User, Trash2, ArrowRight, ShieldAlert, Cpu } from "lucide-react";
+import { Send, Sparkles, Bot, User, Trash2, ArrowRight, ShieldAlert, Cpu, Zap } from "lucide-react";
+import { getHermesConfig } from "../services/hermesAgent";
 
 interface Message {
   role: "user" | "assistant";
@@ -24,6 +25,7 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isHermesMode, setIsHermesMode] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Sync welcome message on mount and when activeAsset changes
@@ -66,7 +68,9 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
         resistances: marketStructure.resistanceLines,
       };
 
-      const response = await fetch("/api/chat-terminal", {
+      const finalConfig = isHermesMode ? getHermesConfig(customConfig) : customConfig;
+
+      const response = await fetch("/api/ai/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -74,7 +78,7 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
         body: JSON.stringify({
           messages: [...messages, userMsg],
           marketContext,
-          customConfig,
+          customConfig: finalConfig,
         }),
       });
 
@@ -117,10 +121,10 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
     return lines.map((line, idx) => {
       // Headers
       if (line.startsWith("### ")) {
-        return <h4 key={idx} className="text-sm font-display font-semibold text-amber-400 mt-3 mb-1.5">{line.replace("### ", "")}</h4>;
+        return <h4 key={idx} className="text-sm font-display font-semibold text-[var(--accent-gold)] mt-3 mb-1.5">{line.replace("### ", "")}</h4>;
       }
       if (line.startsWith("## ")) {
-        return <h3 key={idx} className="text-base font-display font-bold text-amber-500 mt-4 mb-2 border-b border-gray-800 pb-1">{line.replace("## ", "")}</h3>;
+        return <h3 key={idx} className="text-base font-display font-bold text-[var(--accent-gold)] mt-4 mb-2 border-b border-white/10 pb-1">{line.replace("## ", "")}</h3>;
       }
       if (line.startsWith("# ")) {
         return <h2 key={idx} className="text-lg font-display font-extrabold text-white mt-5 mb-2.5">{line.replace("# ", "")}</h2>;
@@ -129,7 +133,7 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
       // Blockquotes / Warnings
       if (line.startsWith("> ")) {
         return (
-          <blockquote key={idx} className="border-l-2 border-amber-500 pl-3 py-1 my-2 text-gray-400 italic bg-amber-500/5 text-xs">
+          <blockquote key={idx} className="border-l-2 border-amber-500 pl-3 py-1 my-2 text-gray-400 italic bg-[var(--accent-gold)]/5 text-xs">
             {line.replace("> ", "")}
           </blockquote>
         );
@@ -163,7 +167,7 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
         return <strong key={i} className="text-white font-medium">{part.slice(2, -2)}</strong>;
       }
       if (part.startsWith("`") && part.endsWith("`")) {
-        return <code key={i} className="bg-gray-900 border border-gray-800 px-1 py-0.5 rounded text-amber-400 font-mono text-[10px]">{part.slice(1, -1)}</code>;
+        return <code key={i} className="bg-white/5 border border-white/10 px-1 py-0.5 rounded text-[var(--accent-gold)] data-value text-[11px] text-[10px]">{part.slice(1, -1)}</code>;
       }
       return part;
     });
@@ -171,36 +175,55 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
 
   if (!activeAsset) {
     return (
-      <div id="ai-chat-widget" className="flex flex-col h-full bg-[#0a0f1e]/80 backdrop-blur-md rounded-xl border border-gray-800 overflow-hidden shadow-2xl relative p-6 justify-center items-center text-gray-400 font-mono text-xs">
-        <Bot className="h-6 w-6 text-amber-500 animate-pulse mb-2" />
+      <div id="ai-chat-widget" className="flex flex-col h-full bg-[#030303]/90 lux-card backdrop-blur-md rounded-xl border border-white/10 overflow-hidden shadow-2xl relative p-6 justify-center items-center text-gray-400 data-value text-[11px] text-xs">
+        <Bot className="h-6 w-6 text-[var(--accent-gold)] animate-pulse mb-2" />
         Syncing live data feed...
       </div>
     );
   }
 
   return (
-    <div id="ai-chat-widget" className="flex flex-col h-full bg-[#0a0f1e]/80 backdrop-blur-md rounded-xl border border-gray-800 overflow-hidden shadow-2xl relative" dir="rtl">
+    <div id="ai-chat-widget" className={`flex flex-col h-full backdrop-blur-md rounded-xl border overflow-hidden shadow-2xl relative ${isHermesMode ? "bg-[#130a1e]/80 border-purple-800/50" : "bg-[#030303]/90 lux-card border-white/10"}`} dir="rtl">
       
       {/* Widget Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800 bg-gray-950/40">
+      <div className={`flex items-center justify-between px-4 py-3 border-b ${isHermesMode ? "border-purple-800/50 bg-purple-950/20" : "border-white/10 bg-black/20"}`}>
         <div className="flex items-center gap-2">
-          <div className="p-1 rounded bg-amber-500/10 border border-amber-500/20">
-            <Sparkles className="h-4 w-4 text-amber-400 animate-pulse" />
+          <div className={`p-1 rounded border ${isHermesMode ? "bg-purple-500/10 border-purple-500/20" : "bg-[var(--accent-gold)]/10 border-[var(--accent-gold)]/20"}`}>
+            <Sparkles className={`h-4 w-4 animate-pulse ${isHermesMode ? "text-purple-400" : "text-[var(--accent-gold)]"}`} />
           </div>
           <div>
-            <h3 className="text-xs font-display font-bold text-white tracking-wider">دستیار هوش مصنوعی ترمینال طلا</h3>
-            <p className="text-[10px] text-gray-500 flex items-center gap-1 font-mono">
-              <Cpu className="h-3 w-3" /> {customConfig.model} @ {customConfig.temperature}
+            <h3 className="text-xs font-display font-bold text-white tracking-wider flex items-center gap-2">
+              دستیار هوش مصنوعی ترمینال طلا
+              <span className={`px-1.5 py-0.5 rounded text-[9px] data-value text-[11px] ${isHermesMode ? "bg-purple-500/20 text-purple-400 border border-purple-500/30" : "bg-gray-800 text-gray-400 border border-gray-700"}`}>
+                {isHermesMode ? "HERMES" : "STANDARD"}
+              </span>
+            </h3>
+            <p className="text-[10px] text-gray-500 flex items-center gap-1 data-value text-[11px]">
+              <Cpu className="h-3 w-3" /> {isHermesMode ? "Hermes Agent Mode" : customConfig.model} @ {isHermesMode ? "0.7" : customConfig.temperature}
             </p>
           </div>
         </div>
-        <button
-          onClick={clearChat}
-          className="p-1.5 rounded text-gray-500 hover:text-rose-400 hover:bg-rose-500/10 transition"
-          title="پاک کردن تاریخچه گفتگو"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsHermesMode(!isHermesMode)}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold transition ${
+              isHermesMode
+                ? "bg-purple-500 text-white shadow-[0_0_10px_rgba(168,85,247,0.5)]"
+                : "bg-gray-800 text-gray-400 hover:text-white"
+            }`}
+            title="Toggle Hermes Elite Agent Mode"
+          >
+            <Zap className="h-3 w-3" />
+            HERMES
+          </button>
+          <button
+            onClick={clearChat}
+            className="p-1.5 rounded text-gray-500 hover:text-[var(--accent-crimson)] hover:bg-[var(--accent-crimson)]/10 transition"
+            title="پاک کردن تاریخچه گفتگو"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Message Output Log */}
@@ -213,17 +236,21 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
             {/* Avatar */}
             <div className={`h-7 w-7 rounded-full flex items-center justify-center shrink-0 border ${
               msg.role === "user" 
-                ? "bg-amber-500/10 border-amber-500/20 text-amber-400" 
-                : "bg-gray-900 border-gray-800 text-gray-400"
+                ? "bg-[var(--accent-gold)]/10 border-[var(--accent-gold)]/20 text-[var(--accent-gold)]" 
+                : isHermesMode
+                  ? "bg-purple-900 border-purple-800 text-purple-400"
+                  : "bg-white/5 border-white/10 text-gray-400"
             }`}>
-              {msg.role === "user" ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+              {msg.role === "user" ? <User className="h-3.5 w-3.5" /> : (isHermesMode ? <Zap className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />)}
             </div>
 
             {/* Bubble content */}
             <div className={`p-3 rounded-lg text-xs leading-relaxed ${
               msg.role === "user"
-                ? "bg-amber-500/10 text-gray-100 border border-amber-500/20"
-                : "bg-gray-900/60 text-gray-300 border border-gray-900"
+                ? "bg-[var(--accent-gold)]/10 text-gray-100 border border-[var(--accent-gold)]/20"
+                : isHermesMode
+                  ? "bg-purple-900/30 text-gray-200 border border-purple-900"
+                  : "bg-white/5/60 text-gray-300 border border-white/5"
             }`}>
               {renderMarkdown(msg.content)}
             </div>
@@ -232,15 +259,15 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
 
         {loading && (
           <div className="flex gap-3 max-w-[80%] ml-auto items-center">
-            <div className="h-7 w-7 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-              <Bot className="h-3.5 w-3.5 text-amber-400 animate-spin" />
+            <div className="h-7 w-7 rounded-full bg-[var(--accent-gold)]/10 border border-[var(--accent-gold)]/20 flex items-center justify-center shrink-0">
+              <Bot className="h-3.5 w-3.5 text-[var(--accent-gold)] animate-spin" />
             </div>
-            <div className="bg-gray-900/40 border border-gray-950 px-4 py-2.5 rounded-lg flex items-center gap-2">
+            <div className="bg-white/5/40 border border-gray-950 px-4 py-2.5 rounded-lg flex items-center gap-2">
               <span className="text-[11px] text-gray-400">در حال دریافت جریان داده‌ها و پردازش ساختار بازار (SMC)...</span>
               <div className="flex gap-1">
-                <span className="h-1.5 w-1.5 bg-amber-400 rounded-full animate-bounce"></span>
-                <span className="h-1.5 w-1.5 bg-amber-400 rounded-full animate-bounce [animation-delay:0.2s]"></span>
-                <span className="h-1.5 w-1.5 bg-amber-400 rounded-full animate-bounce [animation-delay:0.4s]"></span>
+                <span className="h-1.5 w-1.5 bg-[var(--accent-gold)] rounded-full animate-bounce"></span>
+                <span className="h-1.5 w-1.5 bg-[var(--accent-gold)] rounded-full animate-bounce [animation-delay:0.2s]"></span>
+                <span className="h-1.5 w-1.5 bg-[var(--accent-gold)] rounded-full animate-bounce [animation-delay:0.4s]"></span>
               </div>
             </div>
           </div>
@@ -248,12 +275,12 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
 
         {error && (
           <div className="bg-rose-950/20 border border-rose-900/40 p-3 rounded-lg text-xs text-rose-300 flex items-start gap-2 max-w-[90%]">
-            <ShieldAlert className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+            <ShieldAlert className="h-4 w-4 shrink-0 text-[var(--accent-crimson)] mt-0.5" />
             <div>
               <p className="font-semibold">پردازش پرسش با خطا مواجه شد</p>
               <p className="opacity-80">{error}</p>
               <p className="mt-1 text-[10px] text-gray-500">
-                جهت برقراری ارتباط، از پیکربندی صحیح کلید API در بخش تنظیمات ترمینال اطمینان حاصل کنید.
+                متاسفانه در حال حاضر به دلیل ترافیک بالا، سرور قادر به پاسخگویی نیست. لطفاً دقایقی دیگر تلاش کنید.
               </p>
             </div>
           </div>
@@ -263,17 +290,17 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
 
       {/* Suggestion Chips */}
       {messages.length <= 2 && !loading && (
-        <div className="px-4 py-2 bg-gray-950/20 border-t border-gray-900">
-          <p className="text-[10px] text-gray-500 mb-1.5 font-mono">عملیات‌های معاملاتی هوشمند پیشنهادی:</p>
+        <div className="px-4 py-2 bg-black/5 border-t border-white/5">
+          <p className="text-[10px] text-gray-500 mb-1.5 data-value text-[11px]">عملیات‌های معاملاتی هوشمند پیشنهادی:</p>
           <div className="grid grid-cols-2 gap-1.5">
             {promptSuggestions.map((s, i) => (
               <button
                 key={i}
                 onClick={() => handleSend(s.query)}
-                className="text-right text-[11px] text-gray-400 hover:text-white hover:bg-gray-900 bg-gray-950/50 p-2 rounded border border-gray-800 transition flex items-center justify-between group"
+                className="text-right text-[11px] text-gray-400 hover:text-white hover:bg-white/5 bg-black/40/50 p-2 rounded border border-white/10 transition flex items-center justify-between group"
               >
                 <span>{s.label}</span>
-                <ArrowRight className="h-3 w-3 text-amber-500 opacity-0 group-hover:opacity-100 transition-all shrink-0 mr-1 rotate-180" />
+                <ArrowRight className="h-3 w-3 text-[var(--accent-gold)] opacity-0 group-hover:opacity-100 transition-all shrink-0 mr-1 rotate-180" />
               </button>
             ))}
           </div>
@@ -286,7 +313,7 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
           e.preventDefault();
           handleSend(input);
         }}
-        className="p-3 border-t border-gray-800 bg-gray-950/60 flex items-center gap-2"
+        className="p-3 border-t border-white/10 bg-black/40/60 flex items-center gap-2"
       >
         <input
           type="text"
@@ -294,12 +321,12 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
           onChange={(e) => setInput(e.target.value)}
           placeholder={`درباره ساختار ${activeAsset.symbol} یا رویدادهای ماکرو طلا بپرسید...`}
           disabled={loading}
-          className="flex-grow bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/50 transition font-sans disabled:opacity-50 text-right"
+          className="flex-grow bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500/50 transition font-sans disabled:opacity-50 text-right"
         />
         <button
           type="submit"
           disabled={loading || !input.trim()}
-          className="p-2 bg-amber-500 hover:bg-amber-600 disabled:bg-gray-800 disabled:text-gray-600 text-black rounded-lg transition shrink-0 rotate-180"
+          className="p-2 bg-[var(--accent-gold)] hover:bg-amber-600 disabled:bg-gray-800 disabled:text-gray-600 text-black rounded-lg transition shrink-0 rotate-180"
         >
           <Send className="h-3.5 w-3.5" />
         </button>

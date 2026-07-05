@@ -1,0 +1,22 @@
+const cheerio = require('cheerio');
+fetch('https://www.tgju.org/profile/sekee', {
+  headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+}).then(res => res.text()).then(html => {
+  const $ = cheerio.load(html);
+  let priceText = $(".value-right .price, [data-field='price']").first().text().trim();
+  console.log("emami text:", priceText);
+});
+fetch('https://www.tgju.org/profile/nim', {
+  headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+}).then(res => res.text()).then(html => {
+  const $ = cheerio.load(html);
+  let priceText = $(".value-right .price, [data-field='price']").first().text().trim();
+  console.log("nim text:", priceText);
+});
+fetch('https://www.tgju.org/profile/geram24', {
+  headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+}).then(res => res.text()).then(html => {
+  const $ = cheerio.load(html);
+  let priceText = $(".value-right .price, [data-field='price']").first().text().trim();
+  console.log("24k text:", priceText);
+});

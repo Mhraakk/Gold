@@ -149,7 +149,7 @@ const PRESET_TEMPLATES: Omit<StrategyRule, "id" | "createdAt" | "isActive">[] = 
   }
 ];
 
-export default function StrategyBuilder({
+const StrategyBuilder = function StrategyBuilder({
   activeAssetId,
   activeAssetSymbol,
   activeAssetPersianName,
@@ -296,11 +296,11 @@ export default function StrategyBuilder({
   const getSignalBadgeStyle = (signal: StrategyRule["actionSignal"]) => {
     switch (signal) {
       case "BUY":
-        return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+        return "bg-[var(--accent-emerald)]/10 text-[var(--accent-emerald)] border border-emerald-500/20";
       case "SELL":
-        return "bg-rose-500/10 text-rose-400 border border-rose-500/20";
+        return "bg-[var(--accent-crimson)]/10 text-[var(--accent-crimson)] border border-rose-500/20";
       case "ALERT":
-        return "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+        return "bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] border border-[var(--accent-gold)]/20";
       default:
         return "bg-gray-500/10 text-gray-400 border border-gray-500/20";
     }
@@ -310,24 +310,24 @@ export default function StrategyBuilder({
     <div id="strategy-builder-wrapper" className="space-y-6">
       
       {/* Overview stats header banner */}
-      <div className="glass-panel rounded-2xl p-5 border border-gray-900/80 bg-gradient-to-r from-gray-950/80 to-amber-950/10 relative overflow-hidden flex flex-wrap items-center justify-between gap-4">
+      <div className="glass-panel rounded-2xl p-5 border border-white/5/80 bg-gradient-to-r from-gray-950/80 to-amber-950/10 relative overflow-hidden flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-2 z-10 relative">
-          <span className="text-[10px] font-sans bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+          <span className="text-[10px] font-sans bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] border border-[var(--accent-gold)]/20 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
             ماژول اتوماسیون کوانت SMC
           </span>
           <h2 className="font-display font-extrabold text-lg text-white flex items-center gap-2">
-            <Cpu className="h-5 w-5 text-amber-500" />
+            <Cpu className="h-5 w-5 text-[var(--accent-gold)]" />
             <span>استراتژی‌ساز منطقی ساختار بازار</span>
           </h2>
           <p className="text-xs text-gray-400 max-w-2xl leading-relaxed">
             قوانین شرطی و ریاضی بر اساس شاخص‌های RSI زنده، اوردربلاک‌های SMC، نوسان‌پذیری ATR یا میانگین‌های متحرک بسازید. پیکربندی‌ها در مرورگر ذخیره شده و به موتور تحلیل هوش مصنوعی تزریق می‌شوند.
           </p>
         </div>
-        <div className="z-10 shrink-0 bg-gray-900/80 border border-gray-800 rounded-xl p-3 text-right space-y-1">
+        <div className="z-10 shrink-0 bg-white/5/80 border border-white/10 rounded-xl p-3 text-right space-y-1">
           <span className="text-[10px] text-gray-500 font-sans block uppercase">وضعیت استراتژی‌های فعال</span>
           <div className="flex items-center gap-2 justify-end">
-            <div className={`h-2.5 w-2.5 rounded-full ${activeTriggersCount > 0 ? "bg-rose-500 animate-ping" : "bg-emerald-500"}`}></div>
-            <span className="text-xs font-mono font-extrabold text-white">
+            <div className={`h-2.5 w-2.5 rounded-full ${activeTriggersCount > 0 ? "bg-[var(--accent-crimson)] animate-ping" : "bg-[var(--accent-emerald)]"}`}></div>
+            <span className="text-xs data-value text-[11px] font-extrabold text-white">
               {activeTriggersCount} قانون فعال شده
             </span>
           </div>
@@ -341,9 +341,9 @@ export default function StrategyBuilder({
         <div className="col-span-1 lg:col-span-5 space-y-4">
           
           {/* Preset templates selector list */}
-          <div className="glass-panel rounded-xl p-4 border border-gray-900/80 space-y-3 bg-gray-950/20">
-            <div className="flex items-center gap-2 text-xs font-sans text-gray-400 font-bold border-b border-gray-900 pb-2">
-              <BookOpen className="h-4 w-4 text-amber-500" />
+          <div className="glass-panel rounded-xl p-4 border border-white/5/80 space-y-3 bg-black/5">
+            <div className="flex items-center gap-2 text-xs font-sans text-gray-400 font-bold border-b border-white/5 pb-2">
+              <BookOpen className="h-4 w-4 text-[var(--accent-gold)]" />
               <span>بارگذاری استراتژی‌های پیش‌فرض</span>
             </div>
             <div className="grid grid-cols-1 gap-2">
@@ -351,9 +351,9 @@ export default function StrategyBuilder({
                 <button
                   key={idx}
                   onClick={() => handleApplyPreset(preset)}
-                  className="w-full text-right p-2.5 rounded-lg border border-gray-900 bg-gray-950/40 hover:bg-amber-500/5 hover:border-amber-500/30 transition text-xs font-mono flex items-center justify-between group cursor-pointer"
+                  className="w-full text-right p-2.5 rounded-lg border border-white/5 bg-black/20 hover:bg-[var(--accent-gold)]/5 hover:border-[var(--accent-gold)]/30 transition text-xs data-value text-[11px] flex items-center justify-between group cursor-pointer"
                 >
-                  <span className="text-gray-300 group-hover:text-amber-400 transition font-sans font-medium">{preset.name}</span>
+                  <span className="text-gray-300 group-hover:text-[var(--accent-gold)] transition font-sans font-medium">{preset.name}</span>
                   <span className={`text-[9px] px-1.5 py-0.2 rounded uppercase shrink-0 font-bold ml-2 ${getSignalBadgeStyle(preset.actionSignal)}`}>
                     {preset.actionSignal === "BUY" ? "خرید" : preset.actionSignal === "SELL" ? "فروش" : preset.actionSignal === "ALERT" ? "هشدار" : "خنثی"}
                   </span>
@@ -363,21 +363,21 @@ export default function StrategyBuilder({
           </div>
 
           {/* Strategy Form Constructor */}
-          <form onSubmit={handleAddRule} className="glass-panel rounded-xl p-5 border border-gray-900/80 space-y-4 text-right">
-            <div className="flex items-center gap-2 border-b border-gray-900 pb-3 justify-start">
-              <Sliders className="h-4.5 w-4.5 text-amber-500" />
+          <form onSubmit={handleAddRule} className="glass-panel rounded-xl p-5 border border-white/5/80 space-y-4 text-right">
+            <div className="flex items-center gap-2 border-b border-white/5 pb-3 justify-start">
+              <Sliders className="h-4.5 w-4.5 text-[var(--accent-gold)]" />
               <h3 className="text-xs font-sans font-bold uppercase text-white">سازنده فرمول شرطی اتوماسیون</h3>
             </div>
 
             {formError && (
-              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-lg text-xs text-rose-400 flex items-center gap-2 font-mono">
+              <div className="p-3 bg-[var(--accent-crimson)]/10 border border-rose-500/20 rounded-lg text-xs text-[var(--accent-crimson)] flex items-center gap-2 data-value text-[11px]">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span>{formError}</span>
               </div>
             )}
 
             {successMsg && (
-              <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-400 flex items-center gap-2 font-mono">
+              <div className="p-3 bg-[var(--accent-emerald)]/10 border border-emerald-500/20 rounded-lg text-xs text-[var(--accent-emerald)] flex items-center gap-2 data-value text-[11px]">
                 <Check className="h-4 w-4 shrink-0" />
                 <span>{successMsg}</span>
               </div>
@@ -391,20 +391,20 @@ export default function StrategyBuilder({
                 placeholder="مثال: فشار صعودی اشباع فروش"
                 value={newRuleName}
                 onChange={(e) => setNewRuleName(e.target.value)}
-                className="w-full bg-gray-950/80 border border-gray-900 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/40 transition font-sans text-right"
+                className="w-full bg-black/40/80 border border-white/5 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-amber-500/40 transition font-sans text-right"
               />
             </div>
 
             {/* Condition 1 Block */}
-            <div className="space-y-2 border border-gray-900 bg-gray-950/40 p-3 rounded-xl">
-              <span className="text-[9px] text-amber-500 font-sans uppercase block font-extrabold text-right">شرط اول (اصلی)</span>
+            <div className="space-y-2 border border-white/5 bg-black/20 p-3 rounded-xl">
+              <span className="text-[9px] text-[var(--accent-gold)] font-sans uppercase block font-extrabold text-right">شرط اول (اصلی)</span>
               
               <div className="grid grid-cols-12 gap-2">
                 <div className="col-span-5">
                   <select
                     value={newCond1Metric}
                     onChange={(e) => setNewCond1Metric(e.target.value as any)}
-                    className="w-full bg-gray-950 border border-gray-900 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/40 font-sans text-right"
+                    className="w-full bg-black/40 border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/40 font-sans text-right"
                   >
                     <option value="rsi">شاخص RSI</option>
                     <option value="price">قیمت (زنده)</option>
@@ -418,7 +418,7 @@ export default function StrategyBuilder({
                   <select
                     value={newCond1Op}
                     onChange={(e) => setNewCond1Op(e.target.value as any)}
-                    className="w-full bg-gray-950 border border-gray-900 rounded-lg px-2 py-1.5 text-xs text-white text-center focus:outline-none focus:border-amber-500/40 font-mono font-bold"
+                    className="w-full bg-black/40 border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white text-center focus:outline-none focus:border-amber-500/40 data-value text-[11px] font-bold"
                   >
                     <option value="<">&lt;</option>
                     <option value=">">&gt;</option>
@@ -432,7 +432,7 @@ export default function StrategyBuilder({
                     type="number"
                     value={newCond1Value}
                     onChange={(e) => setNewCond1Value(parseFloat(e.target.value))}
-                    className="w-full bg-gray-950 border border-gray-900 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/40 font-mono text-center"
+                    className="w-full bg-black/40 border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/40 data-value text-[11px] text-center"
                   />
                 </div>
               </div>
@@ -441,18 +441,18 @@ export default function StrategyBuilder({
             {/* Logical Operator (AND/OR) */}
             <div className="flex items-center justify-between px-1">
               <span className="text-[10px] text-gray-500 font-sans uppercase">نوع ترکیب شرط‌ها</span>
-              <div className="inline-flex rounded-lg p-0.5 bg-gray-950 border border-gray-900">
+              <div className="inline-flex rounded-lg p-0.5 bg-black/40 border border-white/5">
                 <button
                   type="button"
                   onClick={() => setNewCondType("and")}
-                  className={`px-3 py-1 rounded-md text-[10px] transition ${newCondType === "and" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold" : "text-gray-500 hover:text-white"}`}
+                  className={`px-3 py-1 rounded-md text-[10px] transition ${newCondType === "and" ? "bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] border border-[var(--accent-gold)]/20 font-bold" : "text-gray-500 hover:text-white"}`}
                 >
                   و (AND)
                 </button>
                 <button
                   type="button"
                   onClick={() => setNewCondType("or")}
-                  className={`px-3 py-1 rounded-md text-[10px] transition ${newCondType === "or" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold" : "text-gray-500 hover:text-white"}`}
+                  className={`px-3 py-1 rounded-md text-[10px] transition ${newCondType === "or" ? "bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] border border-[var(--accent-gold)]/20 font-bold" : "text-gray-500 hover:text-white"}`}
                 >
                   یا (OR)
                 </button>
@@ -460,9 +460,9 @@ export default function StrategyBuilder({
             </div>
 
             {/* Condition 2 Block */}
-            <div className="space-y-2 border border-gray-900 bg-gray-950/40 p-3 rounded-xl">
+            <div className="space-y-2 border border-white/5 bg-black/20 p-3 rounded-xl">
               <div className="flex items-center justify-between">
-                <span className="text-[9px] text-amber-500 font-sans uppercase block font-extrabold text-right">شرط دوم (ثانویه)</span>
+                <span className="text-[9px] text-[var(--accent-gold)] font-sans uppercase block font-extrabold text-right">شرط دوم (ثانویه)</span>
                 <button
                   type="button"
                   onClick={() => {
@@ -479,7 +479,7 @@ export default function StrategyBuilder({
               </div>
               
               {newCond2Metric === "none" ? (
-                <div className="text-center py-2 text-[10px] text-gray-500 font-mono italic">
+                <div className="text-center py-2 text-[10px] text-gray-500 data-value text-[11px] italic">
                   فرمول استراتژی بر اساس شرط اول ارزیابی می‌شود.
                 </div>
               ) : (
@@ -488,7 +488,7 @@ export default function StrategyBuilder({
                     <select
                       value={newCond2Metric}
                       onChange={(e) => setNewCond2Metric(e.target.value as any)}
-                      className="w-full bg-gray-950 border border-gray-900 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/40 font-sans text-right"
+                      className="w-full bg-black/40 border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/40 font-sans text-right"
                     >
                       <option value="rsi">شاخص RSI</option>
                       <option value="price">قیمت (زنده)</option>
@@ -502,7 +502,7 @@ export default function StrategyBuilder({
                     <select
                       value={newCond2Op}
                       onChange={(e) => setNewCond2Op(e.target.value as any)}
-                      className="w-full bg-gray-950 border border-gray-900 rounded-lg px-2 py-1.5 text-xs text-white text-center focus:outline-none focus:border-amber-500/40 font-mono font-bold"
+                      className="w-full bg-black/40 border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white text-center focus:outline-none focus:border-amber-500/40 data-value text-[11px] font-bold"
                     >
                       <option value="<">&lt;</option>
                       <option value=">">&gt;</option>
@@ -516,7 +516,7 @@ export default function StrategyBuilder({
                       type="number"
                       value={newCond2Value}
                       onChange={(e) => setNewCond2Value(parseFloat(e.target.value))}
-                      className="w-full bg-gray-950 border border-gray-900 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/40 font-mono text-center"
+                      className="w-full bg-black/40 border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/40 data-value text-[11px] text-center"
                     />
                   </div>
                 </div>
@@ -529,9 +529,9 @@ export default function StrategyBuilder({
               <div className="grid grid-cols-4 gap-2">
                 {(["BUY", "SELL", "ALERT", "NEUTRAL"] as const).map((sig) => {
                   const isSelected = newActionSignal === sig;
-                  let bg = isSelected ? "bg-amber-500/10 text-amber-400 border-amber-500/40" : "bg-gray-950 text-gray-500 border-gray-900 hover:text-white";
-                  if (isSelected && sig === "BUY") bg = "bg-emerald-500/10 text-emerald-400 border-emerald-500/40";
-                  if (isSelected && sig === "SELL") bg = "bg-rose-500/10 text-rose-400 border-rose-500/40";
+                  let bg = isSelected ? "bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] border-amber-500/40" : "bg-black/40 text-gray-500 border-white/5 hover:text-white";
+                  if (isSelected && sig === "BUY") bg = "bg-[var(--accent-emerald)]/10 text-[var(--accent-emerald)] border-emerald-500/40";
+                  if (isSelected && sig === "SELL") bg = "bg-[var(--accent-crimson)]/10 text-[var(--accent-crimson)] border-rose-500/40";
                   
                   return (
                     <button
@@ -562,28 +562,28 @@ export default function StrategyBuilder({
         <div className="col-span-1 lg:col-span-7 space-y-4">
           
           {/* Live Indicator Feed Metrics Header */}
-          <div className="glass-panel rounded-xl p-4 border border-gray-900/80 bg-gray-950/20 text-right">
+          <div className="glass-panel rounded-xl p-4 border border-white/5/80 bg-black/5 text-right">
             <span className="text-[9px] font-sans text-gray-500 block uppercase tracking-wider mb-2">ارزیابی زنده شاخص‌ها برای {activeAssetPersianName} ({activeAssetSymbol})</span>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 font-sans text-center">
-              <div className="bg-gray-950 p-2 rounded-lg border border-gray-900">
+              <div className="bg-black/40 p-2 rounded-lg border border-white/5">
                 <span className="text-[9px] text-gray-500 block">قیمت فعلی</span>
-                <span className="text-white text-xs font-bold font-mono">{currentPrice.toLocaleString()}</span>
+                <span className="text-white text-xs font-bold data-value text-[11px]">{currentPrice.toLocaleString()}</span>
               </div>
-              <div className="bg-gray-950 p-2 rounded-lg border border-gray-900">
+              <div className="bg-black/40 p-2 rounded-lg border border-white/5">
                 <span className="text-[9px] text-gray-500 block">RSI (۱۴ روزه)</span>
-                <span className="text-amber-400 text-xs font-bold font-mono">{formatMetricDisplay("rsi", calculateRSI(candles))}</span>
+                <span className="text-[var(--accent-gold)] text-xs font-bold data-value text-[11px]">{formatMetricDisplay("rsi", calculateRSI(candles))}</span>
               </div>
-              <div className="bg-gray-950 p-2 rounded-lg border border-gray-900">
+              <div className="bg-black/40 p-2 rounded-lg border border-white/5">
                 <span className="text-[9px] text-gray-500 block">EMA (۲۰)</span>
-                <span className="text-indigo-400 text-xs font-bold font-mono">{formatMetricDisplay("ema20", calculateEMA(candles, 20))}</span>
+                <span className="text-indigo-400 text-xs font-bold data-value text-[11px]">{formatMetricDisplay("ema20", calculateEMA(candles, 20))}</span>
               </div>
-              <div className="bg-gray-950 p-2 rounded-lg border border-gray-900">
+              <div className="bg-black/40 p-2 rounded-lg border border-white/5">
                 <span className="text-[9px] text-gray-500 block">EMA (۵۰)</span>
-                <span className="text-pink-400 text-xs font-bold font-mono">{formatMetricDisplay("ema50", calculateEMA(candles, 50))}</span>
+                <span className="text-pink-400 text-xs font-bold data-value text-[11px]">{formatMetricDisplay("ema50", calculateEMA(candles, 50))}</span>
               </div>
-              <div className="bg-gray-950 p-2 rounded-lg border border-gray-900">
+              <div className="bg-black/40 p-2 rounded-lg border border-white/5">
                 <span className="text-[9px] text-gray-500 block">ATR (۱۴)</span>
-                <span className="text-emerald-400 text-xs font-bold font-mono">{formatMetricDisplay("atr", calculateATR(candles))}</span>
+                <span className="text-[var(--accent-emerald)] text-xs font-bold data-value text-[11px]">{formatMetricDisplay("atr", calculateATR(candles))}</span>
               </div>
             </div>
           </div>
@@ -621,10 +621,10 @@ export default function StrategyBuilder({
                     key={rule.id}
                     className={`glass-panel rounded-xl p-4 border transition-all duration-300 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 ${
                       !rule.isActive 
-                        ? "border-gray-950 bg-gray-950/20 opacity-40 hover:opacity-60" 
+                        ? "border-gray-950 bg-black/5 opacity-40 hover:opacity-60" 
                         : rule.isTriggered 
                           ? "border-rose-500/20 bg-gradient-to-r from-rose-950/10 to-gray-950/80 shadow-[0_0_15px_rgba(239,68,68,0.03)]" 
-                          : "border-gray-900 bg-gray-950/40"
+                          : "border-white/5 bg-black/20"
                     }`}
                   >
                     {/* Visual glowing bar indicating trigger state */}
@@ -637,24 +637,24 @@ export default function StrategyBuilder({
                         <h4 className="text-xs font-extrabold text-white leading-tight font-sans">
                           {rule.name}
                         </h4>
-                        <span className={`text-[8px] font-bold px-1.5 rounded font-mono uppercase shrink-0 ${style}`}>
+                        <span className={`text-[8px] font-bold px-1.5 rounded data-value text-[11px] uppercase shrink-0 ${style}`}>
                           {rule.actionSignal === "BUY" ? "خرید" : rule.actionSignal === "SELL" ? "فروش" : "هشدار"}
                         </span>
                       </div>
 
                       {/* Mathematical logic display */}
-                      <div className="text-[10px] font-mono text-gray-500 space-y-1">
+                      <div className="text-[10px] data-value text-[11px] text-gray-500 space-y-1">
                         <div className="flex flex-wrap items-center gap-1 leading-normal justify-start">
                           <span className="text-gray-400">اگر</span>
-                          <span className="text-amber-400 font-bold">{rule.cond1Metric.toUpperCase()}</span>
+                          <span className="text-[var(--accent-gold)] font-bold">{rule.cond1Metric.toUpperCase()}</span>
                           <span className="text-gray-400">({formatMetricDisplay(rule.cond1Metric, rule.val1)})</span>
                           <span className="font-bold text-white">{rule.cond1Op}</span>
                           <span className="text-indigo-400 font-bold">{rule.cond1Value.toLocaleString()}</span>
 
                           {rule.cond2Metric !== "none" && (
                             <>
-                              <span className="text-amber-500 font-extrabold ml-1">{rule.conditionType === "and" ? "و" : "یا"}</span>
-                              <span className="text-amber-400 font-bold">{rule.cond2Metric.toUpperCase()}</span>
+                              <span className="text-[var(--accent-gold)] font-extrabold ml-1">{rule.conditionType === "and" ? "و" : "یا"}</span>
+                              <span className="text-[var(--accent-gold)] font-bold">{rule.cond2Metric.toUpperCase()}</span>
                               <span className="text-gray-400">({formatMetricDisplay(rule.cond2Metric, rule.val2)})</span>
                               <span className="font-bold text-white">{rule.cond2Op}</span>
                               <span className="text-indigo-400 font-bold">{rule.cond2Value.toLocaleString()}</span>
@@ -669,13 +669,13 @@ export default function StrategyBuilder({
                       
                       {/* Trigger status display */}
                       {rule.isActive && (
-                        <div className="mr-2 font-mono text-right">
+                        <div className="mr-2 data-value text-[11px] text-right">
                           {rule.isTriggered ? (
-                            <span className="text-[10px] font-extrabold text-rose-400 animate-pulse bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded uppercase">
+                            <span className="text-[10px] font-extrabold text-[var(--accent-crimson)] animate-pulse bg-[var(--accent-crimson)]/10 border border-rose-500/20 px-2 py-0.5 rounded uppercase">
                               فعال‌شده
                             </span>
                           ) : (
-                            <span className="text-[10px] text-gray-500 bg-gray-900/60 border border-gray-800/80 px-2 py-0.5 rounded uppercase">
+                            <span className="text-[10px] text-gray-500 bg-white/5/60 border border-white/10/80 px-2 py-0.5 rounded uppercase">
                               در انتظار شرط
                             </span>
                           )}
@@ -687,8 +687,8 @@ export default function StrategyBuilder({
                         onClick={() => toggleRuleActive(rule.id)}
                         className={`h-7 w-7 rounded-lg border flex items-center justify-center transition cursor-pointer ${
                           rule.isActive 
-                            ? "bg-amber-500/10 text-amber-400 border-amber-500/20 hover:brightness-110" 
-                            : "bg-gray-950 text-gray-600 border-gray-900 hover:text-white"
+                            ? "bg-[var(--accent-gold)]/10 text-[var(--accent-gold)] border-[var(--accent-gold)]/20 hover:brightness-110" 
+                            : "bg-black/40 text-gray-600 border-white/5 hover:text-white"
                         }`}
                         title={rule.isActive ? "غیرفعال کردن استراتژی" : "فعال کردن استراتژی"}
                       >
@@ -698,7 +698,7 @@ export default function StrategyBuilder({
                       {/* Delete Button */}
                       <button
                         onClick={() => handleDeleteRule(rule.id)}
-                        className="h-7 w-7 rounded-lg border border-gray-900 bg-gray-950 text-gray-600 hover:text-rose-400 hover:border-rose-500/20 transition flex items-center justify-center cursor-pointer"
+                        className="h-7 w-7 rounded-lg border border-white/5 bg-black/40 text-gray-600 hover:text-[var(--accent-crimson)] hover:border-rose-500/20 transition flex items-center justify-center cursor-pointer"
                         title="حذف استراتژی"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -710,7 +710,7 @@ export default function StrategyBuilder({
               })}
 
               {evaluatedRules.length === 0 && (
-                <div className="py-12 text-center text-gray-500 text-xs font-sans bg-gray-950/20 border border-gray-900 rounded-2xl">
+                <div className="py-12 text-center text-gray-500 text-xs font-sans bg-black/5 border border-white/5 rounded-2xl">
                   هیچ استراتژی‌ای ساخته نشده است. از بوم کناری یا الگوهای پیش‌فرض برای شروع استفاده کنید.
                 </div>
               )}
@@ -719,8 +719,8 @@ export default function StrategyBuilder({
           </div>
 
           {/* Quick Informational Notice */}
-          <div className="p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl text-[10px] font-sans text-gray-500 leading-normal flex gap-2 text-right">
-            <Info className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="p-3 bg-[var(--accent-gold)]/5 border border-amber-500/10 rounded-xl text-[10px] font-sans text-gray-500 leading-normal flex gap-2 text-right">
+            <Info className="h-4 w-4 text-[var(--accent-gold)] shrink-0 mt-0.5" />
             <span>
               استراتژی‌های پیکربندی‌شده بر روی این داشبورد به طور زنده با آخرین قیمت‌ها تطبیق داده می‌شوند. سیگنال‌های صادرشده جهت بهبود پیش‌بینی‌ها مستقیماً به هوش مصنوعی تحلیل‌گر تزریق می‌شوند.
             </span>
@@ -733,3 +733,5 @@ export default function StrategyBuilder({
     </div>
   );
 }
+
+export default React.memo(StrategyBuilder);
