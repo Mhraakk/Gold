@@ -286,9 +286,9 @@ export default function App() {
       }
     }
     return {
-      provider: "gemini",
+      provider: "openai",
       apiKeys_REMOVED: {},
-      model: "gemini-3.5-flash",
+      model: "gpt-4o-mini",
       temperature: 0.15,
       systemPrompt: `You are the Gold Terminal Principal Quant, Geopolitical Strategist & Institutional AI Decision Engine.
 Your analysis must be flawless, reasoning-first, and highly mathematical.

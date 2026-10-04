@@ -1,7 +1,7 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
-import { GoogleGenAI } from "@google/genai";
+import OpenAI from "openai";
 import { createServer as createViteServer } from "vite";
 import { forecastGold18 } from "./src/gold18Forecast";
 import * as cheerio from "cheerio";
@@ -39,6 +39,37 @@ const ownerEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
 const supabaseAdmin = (supabaseUrl && supabaseServiceKey) ? createClient(supabaseUrl, supabaseServiceKey) : null;
 const supabaseClient = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
 const redis = (redisUrl && redisToken) ? new Redis({ url: redisUrl, token: redisToken }) : null;
+
+const AI_PRIMARY_MODEL = process.env.AI_PRIMARY_MODEL || "gpt-4o-mini";
+const AI_DEEP_MODEL = process.env.AI_DEEP_MODEL || "gpt-4o";
+
+type AiChatTurn = { role: string; parts: { text: string }[] };
+
+// Single entry point for all AI calls (OpenAI chat completions)
+async function generateAiContent(opts: {
+  model: string;
+  contents: string | AiChatTurn[];
+  systemInstruction?: string;
+  json?: boolean;
+}): Promise<{ text: string }> {
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
+  if (opts.systemInstruction) messages.push({ role: "system", content: opts.systemInstruction });
+  if (typeof opts.contents === "string") {
+    messages.push({ role: "user", content: opts.contents });
+  } else {
+    for (const turn of opts.contents) {
+      const content = turn.parts.map((p) => p.text).join("\n");
+      messages.push(turn.role === "model" ? { role: "assistant", content } : { role: "user", content });
+    }
+  }
+  const response = await openai.chat.completions.create({
+    model: opts.model,
+    messages,
+    ...(opts.json ? { response_format: { type: "json_object" as const } } : {}),
+  });
+  return { text: response.choices[0]?.message?.content || "" };
+}
 
 // Auth Middleware using Supabase
 async function consumeAiBudget(
@@ -313,10 +344,10 @@ let memoryCache: { latest_analysis: any; forecasts: { [key: string]: any } } = {
 
 // Shared AI Analysis Endpoint
 app.post("/api/analysis/refresh", async (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "Gemini API key not configured on server" });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "OpenAI API key not configured on server" });
 
-  const budgetCheck = await consumeAiBudget("owner", "shared-analysis", process.env.AI_PRIMARY_MODEL || "gemini-3.5-flash", parseInt(process.env.AI_RESERVED_SHARED_ANALYSIS_TOKENS || "1500", 10));
+  const budgetCheck = await consumeAiBudget("owner", "shared-analysis", AI_PRIMARY_MODEL, parseInt(process.env.AI_RESERVED_SHARED_ANALYSIS_TOKENS || "1500", 10));
   if (!budgetCheck.allowed) {
     return res.status(429).json({ error: "سهمیه تحلیل هوش مصنوعی امروز استفاده شده است؛ آخرین تحلیل معتبر همچنان در دسترس است." });
   }
@@ -360,14 +391,13 @@ app.post("/api/analysis/refresh", async (req, res) => {
   "detailedAnalysisMarkdown": "متن تحلیل عمیق مارک‌داون به زبان فارسی"
 }`;
 
-  const ai = new GoogleGenAI({ apiKey });
   try {
-    const response = await ai.models.generateContent({
-      model: process.env.AI_PRIMARY_MODEL || "gemini-3.5-flash",
+    const response = await generateAiContent({
+      model: AI_PRIMARY_MODEL,
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      json: true
     });
-    
+
     const analysisData = JSON.parse(response.text || "{}");
     
     if (supabaseAdmin) {
@@ -399,11 +429,11 @@ app.get("/api/analysis/latest", async (req, res) => {
 
 // AI Chat
 app.post("/api/ai/chat", async (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "Gemini API key not configured on server" });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "OpenAI API key not configured on server" });
 
   const userId = req.ip || "public-user";
-  const budgetCheck = await consumeAiBudget(userId, "chat", process.env.AI_PRIMARY_MODEL || "gemini-3.5-flash", parseInt(process.env.AI_RESERVED_USER_CHAT_TOKENS || "1500", 10));
+  const budgetCheck = await consumeAiBudget(userId, "chat", AI_PRIMARY_MODEL, parseInt(process.env.AI_RESERVED_USER_CHAT_TOKENS || "1500", 10));
   if (!budgetCheck.allowed) {
     return res.status(429).json({ error: "سهمیه تحلیل هوش مصنوعی امروز استفاده شده است؛ آخرین تحلیل معتبر همچنان در دسترس است." });
   }
@@ -414,19 +444,16 @@ app.post("/api/ai/chat", async (req, res) => {
     parts: [{ text: m.content }]
   }));
 
-  const ai = new GoogleGenAI({ apiKey });
   try {
-    const response = await ai.models.generateContent({
-      model: process.env.AI_PRIMARY_MODEL || "gemini-3.5-flash",
+    const response = await generateAiContent({
+      model: AI_PRIMARY_MODEL,
       contents,
-      config: {
-        systemInstruction: `You are an expert Iranian gold market quantitative analyst. ALWAYS respond in Persian.
+      systemInstruction: `You are an expert Iranian gold market quantitative analyst. ALWAYS respond in Persian.
 Current Market Context (For your reference):
 ${marketContext ? `Asset: ${marketContext.assetId}
 Price: ${marketContext.currentPrice} (Note: For MELTED_GOLD, this is strictly Iranian Rial per Mesghal, e.g., 79600000 = 79.6M IRR. For USD/Coins, it is Toman.)
 Supports: ${marketContext.supports?.join(', ')}
-Resistances: ${marketContext.resistances?.join(', ')}` : 'None provided.'}`,
-      }
+Resistances: ${marketContext.resistances?.join(', ')}` : 'None provided.'}`
     });
     res.json({ role: "assistant", content: response.text });
   } catch (err: any) {
@@ -435,19 +462,18 @@ Resistances: ${marketContext.resistances?.join(', ')}` : 'None provided.'}`,
 });
 
 app.post("/api/forecast/parse", async (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "Gemini API key not configured on server" });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "OpenAI API key not configured on server" });
   
   const userId = req.ip || "public-user";
-  const budgetCheck = await consumeAiBudget(userId, "parse", process.env.AI_PRIMARY_MODEL || "gemini-3.5-flash", 100);
+  const budgetCheck = await consumeAiBudget(userId, "parse", AI_PRIMARY_MODEL, 100);
   if (!budgetCheck.allowed) return res.status(429).json({ error: "سهمیه تحلیل هوش مصنوعی تمام شده است." });
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: process.env.AI_PRIMARY_MODEL || "gemini-3.5-flash",
+    const response = await generateAiContent({
+      model: AI_PRIMARY_MODEL,
       contents: `Extract numerical values from this Persian text as JSON with keys: meltedGold, usdIrt, xauusd, usdtIrt, gold18k, emamiCoin. Text: ${req.body.text}`,
-      config: { responseMimeType: "application/json" }
+      json: true
     });
     res.json(JSON.parse(response.text || "{}"));
   } catch (err: any) {
@@ -491,17 +517,16 @@ app.post("/api/forecast/analyze", async (req, res) => {
       return res.status(400).json({ error: "مبلغ دلار نامعتبر است." });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "Gemini API key not configured on server" });
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: "OpenAI API key not configured on server" });
 
     // Optional: budget check
-    const budgetCheck = await consumeAiBudget("owner", "forecast", process.env.AI_DEEP_MODEL || "gemini-3.1-pro-preview", parseInt(process.env.AI_RESERVED_DEEP_FORECAST_TOKENS || "3000", 10));
+    const budgetCheck = await consumeAiBudget("owner", "forecast", AI_DEEP_MODEL, parseInt(process.env.AI_RESERVED_DEEP_FORECAST_TOKENS || "3000", 10));
     if (!budgetCheck.allowed) {
       return res.status(429).json({ error: "سهمیه تحلیل عمیق هوش مصنوعی فعلاً در دسترس نیست." });
     }
 
-    const ai = new GoogleGenAI({ apiKey });
-    const prompt = `Analyze night-time closing data for Iranian Melted Gold and predict tomorrow's market behavior based on this verified market snapshot. 
+    const prompt = `Analyze night-time closing data for Iranian Melted Gold and predict tomorrow's market behavior based on this verified market snapshot.
 Data: ${JSON.stringify(fields)}
 
 You MUST return a JSON object with EXACTLY the following structure. Do not include markdown formatting or extra text outside the JSON.
@@ -534,10 +559,10 @@ You MUST return a JSON object with EXACTLY the following structure. Do not inclu
   "warnings": []
 }`;
 
-    const response = await ai.models.generateContent({
-      model: process.env.AI_DEEP_MODEL || "gemini-3.5-flash",
+    const response = await generateAiContent({
+      model: AI_DEEP_MODEL,
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      json: true
     });
     
     const forecastData = JSON.parse(response.text || "{}");
@@ -752,8 +777,8 @@ app.post("/api/forecast/autofill", async (req, res) => {
 });
 
 app.post("/api/forecast/generate", async (req, res) => {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "Gemini API key not configured on server" });
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "OpenAI API key not configured on server" });
   
   // Check if we already have a forecast for today
   const today = new Date().toISOString().split("T")[0];
@@ -767,17 +792,16 @@ app.post("/api/forecast/generate", async (req, res) => {
   }
 
   // We charge the "owner" budget so it is global
-  const budgetCheck = await consumeAiBudget("owner", "forecast", process.env.AI_DEEP_MODEL || "gemini-3.1-pro-preview", parseInt(process.env.AI_RESERVED_DEEP_FORECAST_TOKENS || "3000", 10));
+  const budgetCheck = await consumeAiBudget("owner", "forecast", AI_DEEP_MODEL, parseInt(process.env.AI_RESERVED_DEEP_FORECAST_TOKENS || "3000", 10));
   if (!budgetCheck.allowed) return res.status(429).json({ error: "سهمیه تحلیل عمیق هوش مصنوعی تمام شده است." });
 
   try {
-    const ai = new GoogleGenAI({ apiKey });
     const prompt = `Analyze night-time closing data for Iranian Melted Gold and predict tomorrow's market behavior. Note: Price values for Melted Gold are strictly in Iranian Rials (IRR) per Mesghal (e.g., 79,600,000 means 79.6 Million Rial). USD and Coin values are in Toman. Do not scale or divide values, preserve the exact digits. Return JSON with closePrice, rangeLow, rangeHigh, midPoint, bullishProb, neutralProb, bearishProb, primaryScenario, bullishScenario, bearishScenario, impacts (usd, usdt, xauusd, coin, trend, news), levels (sup1, sup2, res1, res2, invalidation), confidenceString, confidenceScore. Data: ${JSON.stringify(req.body.input)}`;
     
-    const response = await ai.models.generateContent({
-      model: process.env.AI_DEEP_MODEL || "gemini-3.1-pro-preview",
+    const response = await generateAiContent({
+      model: AI_DEEP_MODEL,
       contents: prompt,
-      config: { responseMimeType: "application/json" }
+      json: true
     });
     
     const forecastData = JSON.parse(response.text || "{}");

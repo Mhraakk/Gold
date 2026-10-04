@@ -158,7 +158,7 @@ export function calculateRuleBasedConfidence(
   return { confidenceScore, probabilityScore };
 }
 
-// 3. Multi-Model AI analysis Orchestrator linking technical, structural arrays, and live assets to Server-side Gemini
+// 3. Multi-Model AI analysis Orchestrator linking technical, structural arrays, and live assets to Server-side OpenAI
 export async function triggerAIAnalysis(
   assetId: AssetId,
   candles: Candle[],
