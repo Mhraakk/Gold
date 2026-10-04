@@ -115,12 +115,13 @@ export interface TradeJournalEntry {
 export interface AlertConfig {
   id: string;
   assetId: AssetId;
-  condition: "above" | "below";
-  value: number;
+  condition?: "above" | "below";
+  // Threshold in the stored price unit: IRR for Iranian assets, USD otherwise
+  value?: number;
   channel?: "telegram" | "email" | "webhook" | "discord" | "browser";
   enabled?: boolean;
   type?: "PRICE_ABOVE" | "PRICE_BELOW" | "TREND_CHANGE" | "VOLATILITY_SPIKE";
-  targetValue?: number;
+  targetValue?: number; // same unit as value
   active?: boolean;
   createdAt?: string;
 }
@@ -150,6 +151,9 @@ export interface APIConnector {
   isActive: boolean;
   targetAssetId: AssetId;
   priority?: 'High' | 'Medium' | 'Low';
+  // Unit of the number the endpoint returns. Missing on connectors saved by
+  // older versions; see connectorPriceUnit() for the default.
+  priceUnit?: 'IRR' | 'TOMAN' | 'USD';
 }
 
 export interface AnalysisResponse {

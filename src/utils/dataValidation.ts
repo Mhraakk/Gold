@@ -67,19 +67,23 @@ export function validateAndNormalizePrice(
 
   const tomanDisplay = (canonicalValue / 10);
 
-  // Hard validation rules for MELTED_GOLD
+  // Plausibility ranges are in IRR and leave wide headroom for inflation
+  // (prices observed Oct 2026: mesghal ≈ 1.15e9, 18k gram ≈ 2.66e8, USD ≈ 2.71e6).
+
+  // Hard validation rules for MELTED_GOLD (one mesghal)
   if (assetId === "MELTED_GOLD") {
-    if (canonicalValue < 30000000 || canonicalValue > 250000000) {
+    if (canonicalValue < 200_000_000 || canonicalValue > 20_000_000_000) {
       validationStatus = "malformed";
     }
-    const mazaneh = canonicalValue / 1000000;
+    // Mazaneh notation: the Toman price in millions (e.g. 115.35)
+    const mazaneh = tomanDisplay / 1000000;
     displayValue = mazaneh.toFixed(2);
-    displayUnit = "میلیون ریال";
+    displayUnit = "میلیون تومان";
     marketNotation = `مظنه ${displayValue}`;
   }
   // Hard validation for USDIRT
   else if (assetId === "USDIRT" || assetId === "USDTIRT") {
-    if (canonicalValue < 300000 || canonicalValue > 3000000) {
+    if (canonicalValue < 300_000 || canonicalValue > 30_000_000) {
       validationStatus = "malformed";
     }
     displayValue = tomanDisplay.toLocaleString();
@@ -88,7 +92,7 @@ export function validateAndNormalizePrice(
   }
   // Hard validation for Gold 18K
   else if (assetId === "GOLD_18K" || assetId === "GOLD_24K" || assetId === "GOLD_GRAM") {
-     if (canonicalValue < 10000000 || canonicalValue > 500000000) {
+     if (canonicalValue < 10_000_000 || canonicalValue > 5_000_000_000) {
        validationStatus = "malformed";
      }
      displayValue = tomanDisplay.toLocaleString();

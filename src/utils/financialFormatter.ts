@@ -39,7 +39,7 @@ export interface FormattedPriceResult {
  * Formats IRR values strictly complying with financial guidelines:
  * - Iranian money is stored as integer IRR.
  * - Toman is only IRR divided by 10 at display time.
- * - Mazaneh notation is IRR divided by 1,000,000 and shown separately.
+ * - Mazaneh notation is Toman divided by 1,000,000 and shown separately.
  * - Never use generic formatting for all assets.
  * - Never guess Rial/Toman from number size.
  * - Never drop zeros.
@@ -56,8 +56,8 @@ export function formatFinancialValue(
   const tomanValue = Math.floor(irrValue / 10);
   
   if (assetId === "MELTED_GOLD") {
-    // 75,000,000 IRR melted gold → Mazaneh 75.00, 7,500,000 Toman
-    const mazanehNum = irrValue / 1000000;
+    // 1,153,500,000 IRR melted gold → 115,350,000 Toman → Mazaneh 115.35 (Toman in millions)
+    const mazanehNum = tomanValue / 1000000;
     // Keep exact decimals (e.g., 75.00) without dropping zeros
     const mazanehStr = mazanehNum.toFixed(2);
     return {

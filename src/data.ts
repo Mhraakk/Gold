@@ -2,13 +2,13 @@ import { AssetInfo, Candle, CalendarEvent, NewsItem, MarketStructure, AssetId } 
 
 // Base prices for reference (No hardcoded prices for Iranian assets as per requirements)
 export const getPrice = (id: AssetId) => {
-  // If we have a cached last valid price in localStorage, use it to avoid crashing the app
-  const cached = localStorage.getItem(`gold_terminal_last_price_${id}`);
+  // If we have a cached last valid price in localStorage, use it to avoid crashing the app.
+  // v2 keys hold IRR; v1 keys could hold Toman figures stored as IRR, so they are ignored.
+  const cached = localStorage.getItem(`gold_terminal_last_price_v2_${id}`);
   if (cached && !isNaN(parseFloat(cached))) return parseFloat(cached);
 
+  // Iranian assets have no fallback: they show "در حال دریافت…" until live data arrives.
   const defaultPrices: Partial<Record<AssetId, number>> = {
-    USDIRT: 61450,
-    USDTIRT: 61850,
     XAUUSD: 2348.50,
     GOLD_FUTURES: 2362.10,
     GOLD_CFD: 2349.00,
@@ -18,7 +18,7 @@ export const getPrice = (id: AssetId) => {
 };
 
 export const ASSETS_METADATA: Record<AssetId, { name: string; persianName: string; symbol: string; decimals: number; unit: string }> = {
-  MELTED_GOLD: { name: "Iranian Melted Gold", persianName: "طلای آب شده ایران", symbol: "MELT_IRT", decimals: 0, unit: "ریال / مثقال" },
+  MELTED_GOLD: { name: "Iranian Melted Gold", persianName: "طلای آب شده ایران", symbol: "MELT_IRT", decimals: 0, unit: "تومان / مثقال" },
   GOLD_18K: { name: "18K Gold Gram", persianName: "طلای آب شده گرمی (۱۸ عیار)", symbol: "GOLD_18K", decimals: 0, unit: "تومان / گرم" },
   GOLD_24K: { name: "24K Gold Gram", persianName: "طلای ۲۴ عیار", symbol: "GOLD_24K", decimals: 0, unit: "تومان / گرم" },
   MESGHAL: { name: "Gold Mesghal", persianName: "مثقال طلا", symbol: "MESGHAL", decimals: 0, unit: "تومان / مثقال" },
@@ -35,9 +35,9 @@ export const ASSETS_METADATA: Record<AssetId, { name: string; persianName: strin
 };
 
 // Generate high-fidelity candles mimicking waves and SMC concepts
-export function generateHistoricalCandles(assetId: AssetId, count = 100): Candle[] {
+export function generateHistoricalCandles(assetId: AssetId, count = 100, basePriceOverride?: number): Candle[] {
   const candles: Candle[] = [];
-  const basePrice = getPrice(assetId);
+  const basePrice = basePriceOverride ?? getPrice(assetId);
   const decimals = ASSETS_METADATA[assetId].decimals;
   
   let currentPrice = basePrice * 0.95; // Start slightly lower
@@ -334,12 +334,12 @@ export function generateLiveAssets(currentPrices?: Record<AssetId, number>): Ass
       persianName: "دلار بازار آزاد به تومان",
       symbol: "USD_IRT",
       currentPrice: getAssetPrice("USDIRT"),
-      change: 1.82,
-      changeNominal: 1100,
-      high24h: 61750,
-      low24h: 60350,
-      volume24h: "125M USD",
-      provider: "بازار ارز تهران",
+      change: getChange("USDIRT"),
+      changeNominal: getChangeNominal("USDIRT"),
+      high24h: getAssetPrice("USDIRT") * 1.01,
+      low24h: getAssetPrice("USDIRT") * 0.99,
+      volume24h: "در حال دریافت...",
+      provider: "در حال دریافت...",
     },
     {
       id: "USDTIRT",
@@ -347,12 +347,12 @@ export function generateLiveAssets(currentPrices?: Record<AssetId, number>): Ass
       persianName: "تتر بازار آزاد به تومان",
       symbol: "USDT_IRT",
       currentPrice: getAssetPrice("USDTIRT"),
-      change: 1.73,
-      changeNominal: 1050,
-      high24h: 62100,
-      low24h: 60800,
-      volume24h: "412M USDT",
-      provider: "بازار نقدی نوبیتکس",
+      change: getChange("USDTIRT"),
+      changeNominal: getChangeNominal("USDTIRT"),
+      high24h: getAssetPrice("USDTIRT") * 1.01,
+      low24h: getAssetPrice("USDTIRT") * 0.99,
+      volume24h: "در حال دریافت...",
+      provider: "در حال دریافت...",
     },
     {
       id: "XAUUSD",

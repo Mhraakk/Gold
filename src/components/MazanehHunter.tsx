@@ -12,7 +12,8 @@ import {
   EyeOff
 } from "lucide-react";
 import { formatToShamsi } from "../utils/shamsi";
-import { AssetInfo } from "../types";
+import { AssetId, AssetInfo } from "../types";
+import { formatAssetAmount, formatAssetPrice, priceUnitLabel } from "../utils/priceDisplay";
 
 interface HunterProps {
   assets: AssetInfo[];
@@ -103,7 +104,7 @@ const MazanehHunter = function MazanehHunter({ assets, assetsMeta }: HunterProps
         evidence: `حباب ضمنی ${spreadPercent.toFixed(2)}% | مظنه با دلار همگام نشده است.`,
         sourcesUsed: ["MELTED_GOLD", "USDIRT", "XAUUSD"],
         rawTimestamps: [new Date().toISOString(), new Date().toISOString()],
-        normalizedValues: [mazanehPrice.toLocaleString(), calculatedFairValue.toLocaleString()],
+        normalizedValues: [formatAssetPrice("MELTED_GOLD", mazanehPrice, { withUnit: true }), formatAssetPrice("MELTED_GOLD", calculatedFairValue, { withUnit: true })],
         triggerReason: "اختلاف بیش از ۱.۵٪ و تأخیر به‌روزرسانی مظنه",
         invalidationCondition: "به‌روزرسانی سریع مظنه در جهت کاهش حباب",
         timestamp: new Date(),
@@ -152,7 +153,7 @@ const MazanehHunter = function MazanehHunter({ assets, assetsMeta }: HunterProps
               <Target className="w-5 h-5 text-[#D4AF37]" />
             </div>
             <h2 className="text-3xl font-display font-bold text-white mb-2">
-              {mazanehPrice ? mazanehPrice.toLocaleString() : "---"} <span className="text-sm text-gray-500 font-mono">ریال</span>
+              {mazanehPrice ? formatAssetPrice("MELTED_GOLD", mazanehPrice) : "---"} <span className="text-sm text-gray-500 font-mono">تومان</span>
             </h2>
             <div className="text-xs text-gray-400 font-mono">
               آخرین به‌روزرسانی: {formatToShamsi(now, { includeTime: true })}
@@ -202,7 +203,7 @@ const MazanehHunter = function MazanehHunter({ assets, assetsMeta }: HunterProps
           {hasValidInputs && calculatedFairValue ? (
             <div className="space-y-4">
               <div className="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-white/5">
-                <span className="font-mono text-sm text-gray-300">{Math.round(calculatedFairValue).toLocaleString()}</span>
+                <span className="font-mono text-sm text-gray-300">{formatAssetPrice("MELTED_GOLD", calculatedFairValue, { withUnit: true })}</span>
                 <span className="text-xs text-gray-500">ارزش محاسبه شده (مرجع)</span>
               </div>
               
@@ -214,15 +215,15 @@ const MazanehHunter = function MazanehHunter({ assets, assetsMeta }: HunterProps
                   </div>
                 </div>
                 <div className="p-3 bg-white/5 rounded-lg border border-white/5">
-                  <div className="text-[10px] text-gray-500 mb-1">اسپرد مطلق (ریال)</div>
+                  <div className="text-[10px] text-gray-500 mb-1">اسپرد مطلق (تومان)</div>
                   <div className="font-mono text-sm text-gray-300">
-                    {Math.abs(spread).toLocaleString()}
+                    {formatAssetAmount("MELTED_GOLD", Math.abs(spread))}
                   </div>
                 </div>
               </div>
               
               <div className="p-3 rounded-lg bg-emerald-500/5 border border-emerald-500/10 text-[10px] text-emerald-400/80 text-right leading-relaxed font-sans">
-                ورودی‌ها: دلار نقدی ({usd?.currentPrice?.toLocaleString()}) و اونس جهانی ({xauusd?.currentPrice?.toLocaleString()}). هرگونه اختلاف بیش از ۱٪ نیازمند بررسی نقدینگی در صنف است.
+                ورودی‌ها: دلار نقدی ({usd ? formatAssetPrice("USDIRT", usd.currentPrice, { withUnit: true }) : "---"}) و اونس جهانی ({xauusd ? formatAssetPrice("XAUUSD", xauusd.currentPrice, { withUnit: true }) : "---"}). هرگونه اختلاف بیش از ۱٪ نیازمند بررسی نقدینگی در صنف است.
               </div>
             </div>
           ) : (
@@ -248,8 +249,8 @@ const MazanehHunter = function MazanehHunter({ assets, assetsMeta }: HunterProps
                     {s.ageSecs}s
                   </div>
                   <div className="text-xs font-mono text-gray-300 flex items-center gap-1">
-                    {s.stat?.currentPrice?.toLocaleString()}
-                    <span className="text-[9px] text-gray-600">{s.unit}</span>
+                    {formatAssetPrice(s.key as AssetId, s.stat?.currentPrice ?? 0)}
+                    <span className="text-[9px] text-gray-600">{priceUnitLabel(s.key as AssetId)}</span>
                   </div>
                 </div>
                 

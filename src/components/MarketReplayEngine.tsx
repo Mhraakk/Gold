@@ -18,6 +18,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { AssetId, Candle } from "../types";
+import { formatAssetAmount } from "../utils/priceDisplay";
 import { ASSETS_METADATA } from "../data";
 
 // Historical scenarios for the Iranian market
@@ -203,7 +204,7 @@ const MarketReplayEngine = function MarketReplayEngine({
       ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
       ctx.font = "10px monospace";
       const p = maxPrice - (range / 4) * i;
-      ctx.fillText(p.toLocaleString(), width - 45, y + 4);
+      ctx.fillText(formatAssetAmount("MELTED_GOLD", p), width - 45, y + 4);
     }
 
     // Draw Candles
@@ -341,8 +342,8 @@ const MarketReplayEngine = function MarketReplayEngine({
       title: "تحلیل معامله (Trade Review)",
       text:
         pnl > 0
-          ? `سودآوری معامله: ${pnl.toLocaleString()} 🟢`
-          : `زیان معامله: ${pnl.toLocaleString()} 🔴`,
+          ? `سودآوری معامله: ${formatAssetAmount("MELTED_GOLD", pnl)} تومان 🟢`
+          : `زیان معامله: ${formatAssetAmount("MELTED_GOLD", pnl)} تومان 🔴`,
       type: "feedback",
     });
   };
@@ -514,9 +515,9 @@ const MarketReplayEngine = function MarketReplayEngine({
               موجودی مجازی
             </span>
             <span className="text-lg data-value font-bold text-white">
-              {balance.toLocaleString()}{" "}
+              {formatAssetAmount("MELTED_GOLD", balance)}{" "}
             </span>
-            <span className="text-[10px] text-gray-500">IRR</span>
+            <span className="text-[10px] text-gray-500">تومان</span>
           </div>
           {activeTrade && (
             <div>
@@ -527,7 +528,7 @@ const MarketReplayEngine = function MarketReplayEngine({
                 className={`text-lg data-value font-bold ${pnl >= 0 ? "text-[var(--accent-emerald)]" : "text-[var(--accent-crimson)]"}`}
               >
                 {pnl > 0 ? "+" : ""}
-                {pnl.toLocaleString()}
+                {formatAssetAmount("MELTED_GOLD", pnl)} تومان
               </span>
             </div>
           )}

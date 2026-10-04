@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { AssetInfo, MarketStructure } from "../types";
 import { Send, Sparkles, Bot, User, Trash2, ArrowRight, ShieldAlert, Cpu, Zap } from "lucide-react";
 import { getHermesConfig } from "../services/hermesAgent";
+import { formatAssetPrice } from "../utils/priceDisplay";
 
 interface Message {
   role: "user" | "assistant";
@@ -37,7 +38,7 @@ export default function AIChat({ activeAsset, marketStructure, customConfig }: A
           content: `### هوش مصنوعی ترمینال طلا فعال شد.
 من به عنوان **تحلیل‌گر تخصصی کوانت و استراتژیست بازار** در خدمت شما هستم.
 
-داده‌های لحظه‌ای و ساختار بازار (SMC) برای **${activeAsset.persianName} (${activeAsset.symbol})** با قیمت فعلی **${activeAsset.currentPrice.toLocaleString()} تومان** در دسترس است.
+داده‌های لحظه‌ای و ساختار بازار (SMC) برای **${activeAsset.persianName} (${activeAsset.symbol})** با قیمت فعلی **${formatAssetPrice(activeAsset.id, activeAsset.currentPrice, { withUnit: true })}** در دسترس است.
 
 یکی از گزینه‌های پیشنهادی زیر را انتخاب کنید یا سوال خود را مطرح کنید:`,
         },

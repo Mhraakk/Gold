@@ -378,6 +378,27 @@ async function engineContext(): Promise<EngineContext> {
   return { snapshot: await getMarketSnapshot(), memory: marketMemory };
 }
 
+// GET /api/market/history - recorded live prices (Toman/USD), bucketed to the
+// last price of each interval. Grows while the server runs (2-minute refresh).
+app.get("/api/market/history", (req, res) => {
+  const asset = String(req.query.asset || "") as MarketKey;
+  const days = Math.min(Math.max(Number(req.query.days) || 7, 1), 90);
+  const bucketMs = Math.min(Math.max(Number(req.query.bucketMinutes) || 60, 1), 1440) * 60_000;
+  if (!SNAPSHOT_TGJU_KEYS.some(([key]) => key === asset)) {
+    return res.status(400).json({ error: "دارایی نامعتبر است." });
+  }
+  const since = Date.now() - days * 86_400_000;
+  const buckets = new Map<number, { t: number; v: number }>();
+  for (const p of marketMemory.get(asset)) {
+    if (p.t >= since) buckets.set(Math.floor(p.t / bucketMs), p);
+  }
+  res.json({
+    asset,
+    unit: USD_QUOTED_KEYS.has(asset) ? "USD" : "TOMAN",
+    points: Array.from(buckets.values()).sort((x, y) => x.t - y.t),
+  });
+});
+
 // --- MARKET WALL & SOURCE REGISTRY ENDPOINTS ---
 
 // GET /api/sources/status - Returns status of all sources
@@ -490,7 +511,7 @@ app.post("/api/analysis/refresh", async (req, res) => {
     const prompt = `شما استراتژیست ارشد کوانت هستید.
 اطلاعات بازار:
 - شناسه بازار: ${assetId}
-- قیمت فعلی: ${currentPrice} (دقت کنید: اگر بازار MELTED_GOLD است، این عدد ارزش ریالی یک مثقال آبشده است. برای مثال 79000000 یعنی 79 میلیون ریال یا 7 میلیون و 900 هزار تومان)
+- قیمت فعلی: ${currentPrice} (دقت کنید: همه قیمت‌های بازار ایران به ریال هستند و هر تومان ۱۰ ریال است. اگر بازار MELTED_GOLD است، این عدد ارزش ریالی یک مثقال آبشده است؛ برای مثال 1154020000 ریال یعنی 115,402,000 تومان)
 
 خروجی باید دقیقاً یک JSON معتبر بدون هیچ متن اضافه‌ای با ساختار زیر باشد:
 {
@@ -578,7 +599,7 @@ app.post("/api/ai/chat", async (req, res) => {
           systemInstruction: `You are an expert Iranian gold market quantitative analyst. ALWAYS respond in Persian.
 Current Market Context (For your reference):
 ${marketContext ? `Asset: ${marketContext.assetId}
-Price: ${marketContext.currentPrice} (Note: For MELTED_GOLD, this is strictly Iranian Rial per Mesghal, e.g., 79600000 = 79.6M IRR. For USD/Coins, it is Toman.)
+Price: ${marketContext.currentPrice} (Note: all Iranian prices are in Rial (IRR); 1 Toman = 10 Rial. MELTED_GOLD is per mesghal, e.g. 1154020000 IRR = 115,402,000 Toman. Answer users in Toman.)
 Supports: ${marketContext.supports?.join(', ')}
 Resistances: ${marketContext.resistances?.join(', ')}` : 'None provided.'}`
         });
@@ -625,14 +646,21 @@ app.post("/api/forecast/analyze", async (req, res) => {
       fields = snapshot.fields;
     }
     
-    // Override fields with custom inputs if provided
+    // Override fields with custom inputs if provided. A value equal to the
+    // snapshot's keeps its live source/freshness; an edited one becomes manual.
     if (customInputs) {
-      if (customInputs.meltedGold) fields.meltedGoldMazaneh = { value: customInputs.meltedGold.toString(), unit: "IRR" };
-      if (customInputs.xauusd) fields.xauusd = { value: customInputs.xauusd.toString(), unit: "USD" };
-      if (customInputs.usdIrt) fields.usdIrt = { value: customInputs.usdIrt.toString(), unit: "IRR" };
-      if (customInputs.gold18k) fields.gold18k = { value: customInputs.gold18k.toString(), unit: "IRR" };
-      if (customInputs.usdtIrt) fields.usdtIrt = { value: customInputs.usdtIrt.toString(), unit: "IRR" };
-      if (customInputs.emamiCoin) fields.emamiCoin = { value: customInputs.emamiCoin.toString(), unit: "IRR" };
+      const override = (key: string, value: unknown, unit: "IRR" | "USD") => {
+        if (!value) return;
+        const prev = fields[key];
+        if (prev && Math.abs(Number(prev.value) - Number(value)) < 0.5) return;
+        fields[key] = { value: String(value), unit };
+      };
+      override("meltedGoldMazaneh", customInputs.meltedGold, "IRR");
+      override("xauusd", customInputs.xauusd, "USD");
+      override("usdIrt", customInputs.usdIrt, "IRR");
+      override("gold18k", customInputs.gold18k, "IRR");
+      override("usdtIrt", customInputs.usdtIrt, "IRR");
+      override("emamiCoin", customInputs.emamiCoin, "IRR");
     }
 
     // Validate required fields
@@ -799,7 +827,7 @@ app.post("/api/forecast/autofill", async (req, res) => {
           value: meltedBest.canonicalIrrValue.toString(),
           rawValue: meltedBest.canonicalIrrValue.toString(),
           unit: "IRR",
-          displayValue: `مظنه ${(meltedBest.canonicalIrrValue / 1000000).toFixed(2)}`,
+          displayValue: `مظنه ${(meltedBest.canonicalIrrValue / 10 / 1000000).toFixed(2)}`, // Toman in millions
           source: meltedBest.sourceName,
           sourceUrl: meltedBest.sourceUrl,
           sourceTimestamp: new Date(meltedBest.timestamp).toISOString(),
@@ -921,7 +949,7 @@ app.post("/api/forecast/generate", async (req, res) => {
       async () => {
         // We charge the "owner" budget so it is global
         await requireAiBudget("owner", "forecast", AI_DEEP_MODEL, parseInt(process.env.AI_RESERVED_DEEP_FORECAST_TOKENS || "3000", 10));
-        const prompt = `Analyze night-time closing data for Iranian Melted Gold and predict tomorrow's market behavior. Note: Price values for Melted Gold are strictly in Iranian Rials (IRR) per Mesghal (e.g., 79,600,000 means 79.6 Million Rial). USD and Coin values are in Toman. Do not scale or divide values, preserve the exact digits. Return JSON with closePrice, rangeLow, rangeHigh, midPoint, bullishProb, neutralProb, bearishProb, primaryScenario, bullishScenario, bearishScenario, impacts (usd, usdt, xauusd, coin, trend, news), levels (sup1, sup2, res1, res2, invalidation), confidenceString, confidenceScore. Data: ${JSON.stringify(req.body.input)}`;
+        const prompt = `Analyze night-time closing data for Iranian Melted Gold and predict tomorrow's market behavior. Note: all Iranian price values (melted gold per mesghal, USD, tether, coins, 18k gold) are in Iranian Rial (IRR); 1 Toman = 10 Rial. Do not scale or divide values, preserve the exact digits. Return JSON with closePrice, rangeLow, rangeHigh, midPoint, bullishProb, neutralProb, bearishProb, primaryScenario, bullishScenario, bearishScenario, impacts (usd, usdt, xauusd, coin, trend, news), levels (sup1, sup2, res1, res2, invalidation), confidenceString, confidenceScore. Data: ${JSON.stringify(req.body.input)}`;
         const response = await generateAiContent({ model: AI_DEEP_MODEL, contents: prompt, json: true });
         const data = JSON.parse(response.text || "{}");
         if (redis) {
@@ -942,50 +970,21 @@ app.post("/api/forecast/generate", async (req, res) => {
 // Gold 18K Forecast Endpoint
 app.get("/api/forecast/gold18", async (req, res) => {
   try {
-    
-    const horizon = req.query.horizon || '1H';
-    
-    // In a real app we'd load verified quotes. Here we use mock data from our registry
-    // But we need to map the internal verified_live quotes.
-    // We will construct a currentQuote and history from the registry
-    
-    // Find verified gold 18k
     const horizonArg = req.query.horizon as string;
-    let assets: any[] = [];
-    try {
-      const allSources = getSourcesStatus();
-      assets = allSources.flatMap((s: any) => s.parsedAssets || []).filter((a: any) => a.assetKey === 'gold_18k' && a.validationStatus === 'valid');
-    } catch(e) {}
-    
-    if (assets.length === 0) {
-       // fallback mock
-       const mockCurrent = { price: 45000000, timestamp: Date.now(), sourceId: 'sys_fallback' };
-       const mockHistory = [
-         { price: 44500000, timestamp: Date.now() - 3600000 * 2, sourceId: 'sys_fallback' },
-         { price: 44800000, timestamp: Date.now() - 3600000, sourceId: 'sys_fallback' },
-         { price: 45000000, timestamp: Date.now(), sourceId: 'sys_fallback' }
-       ];
-       const result = forecastGold18(mockCurrent, mockHistory, horizonArg as any);
-       return res.json({ success: true, result });
+
+    // Live 18k gram price (Toman) and the analyst's recorded history — no mock data.
+    const snapshot = await getMarketSnapshot();
+    const live = snapshot.quotes.gold18;
+    if (!live) {
+      return res.status(503).json({ success: false, error: "قیمت زنده طلای ۱۸ عیار در دسترس نیست؛ کمی بعد دوباره تلاش کنید." });
     }
-    
-    const bestAsset: any = assets.sort((a: any, b: any) => b.timestamp - a.timestamp)[0];
-    const currentQuote = {
-      price: bestAsset.canonicalIrrValue,
-      timestamp: bestAsset.timestamp,
-      sourceId: bestAsset.sourceId
-    };
-    
-    // Make a fake history based on currentQuote to satisfy the deterministic model for now
-    const history = [
-      { price: currentQuote.price * 0.99, timestamp: currentQuote.timestamp - 7200000, sourceId: bestAsset.sourceId },
-      { price: currentQuote.price * 0.995, timestamp: currentQuote.timestamp - 3600000, sourceId: bestAsset.sourceId },
-      { price: currentQuote.price, timestamp: currentQuote.timestamp, sourceId: bestAsset.sourceId }
-    ];
-    
+    const currentQuote = { price: live.value, timestamp: live.fetchedAt, sourceId: live.source };
+    const recent = marketMemory.get("gold18").filter((p) => live.fetchedAt - p.t <= 24 * 3_600_000);
+    const history = (recent.length ? recent : [{ t: live.fetchedAt, v: live.value }])
+      .map((p) => ({ price: p.v, timestamp: p.t, sourceId: live.source }));
+
     const result = forecastGold18(currentQuote, history, horizonArg as any);
-    
-    // Persist result (simplified)
+
     console.log("[Forecast Generated]", result.sourceSnapshotId);
     
     res.json({ success: true, result });

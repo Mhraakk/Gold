@@ -7,6 +7,14 @@ import { validateAndNormalizePrice } from "../utils/dataValidation";
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
+// The form works in Toman (like the market quotes it can parse); the server
+// works in IRR. These fields convert at that boundary.
+const IRANIAN_FIELDS = ["meltedGold", "usdIrt", "usdtIrt", "gold18k", "emamiCoin", "todayHigh", "todayLow"] as const;
+const irrToTomanText = (v: unknown): string => {
+  const n = Number(String(v ?? "").replace(/,/g, ""));
+  return Number.isFinite(n) && n > 0 ? Math.round(n / 10).toLocaleString() : "-";
+};
+
 export interface ForecastInput {
   meltedGold: number;
   usdIrt: number;
@@ -154,12 +162,12 @@ const NextDayForecast = function NextDayForecast({ aiConfig }: { aiConfig: any }
       // Update form values
       setInputData(prev => ({
         ...prev,
-        meltedGold: data.fields.meltedGoldMazaneh?.value ? Number(data.fields.meltedGoldMazaneh.value) : prev.meltedGold,
-        gold18k: data.fields.gold18k?.value ? Number(data.fields.gold18k.value) : prev.gold18k,
+        meltedGold: data.fields.meltedGoldMazaneh?.value ? Number(data.fields.meltedGoldMazaneh.value) / 10 : prev.meltedGold,
+        gold18k: data.fields.gold18k?.value ? Number(data.fields.gold18k.value) / 10 : prev.gold18k,
         xauusd: data.fields.xauusd?.value ? Number(data.fields.xauusd.value) : prev.xauusd,
-        usdIrt: data.fields.usdIrt?.value ? Number(data.fields.usdIrt.value) : prev.usdIrt,
-        usdtIrt: data.fields.usdtIrt?.value ? Number(data.fields.usdtIrt.value) : prev.usdtIrt,
-        emamiCoin: data.fields.emamiCoin?.value ? Number(data.fields.emamiCoin.value) : prev.emamiCoin,
+        usdIrt: data.fields.usdIrt?.value ? Number(data.fields.usdIrt.value) / 10 : prev.usdIrt,
+        usdtIrt: data.fields.usdtIrt?.value ? Number(data.fields.usdtIrt.value) / 10 : prev.usdtIrt,
+        emamiCoin: data.fields.emamiCoin?.value ? Number(data.fields.emamiCoin.value) / 10 : prev.emamiCoin,
       }));
       
       if (data.missingFields && data.missingFields.length > 0) {
@@ -206,7 +214,13 @@ const NextDayForecast = function NextDayForecast({ aiConfig }: { aiConfig: any }
       const res = await fetch("/api/forecast/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ marketSnapshotId: activeSnapshotId, customInputs: inputData })
+        body: JSON.stringify({
+          marketSnapshotId: activeSnapshotId,
+          customInputs: Object.fromEntries(
+            Object.entries(inputData).map(([k, v]) =>
+              [k, (IRANIAN_FIELDS as readonly string[]).includes(k) && typeof v === "number" ? v * 10 : v]),
+          ),
+        })
       });
       
       const data = await res.json();
@@ -271,7 +285,7 @@ const NextDayForecast = function NextDayForecast({ aiConfig }: { aiConfig: any }
           {payload.map((entry: any, index: number) => (
             <div key={index} className="flex items-center gap-2 text-sm" style={{ color: entry.color }}>
               <span className="font-bold">{entry.name}:</span>
-              <span>{entry.value ? entry.value.toLocaleString() : "-"} تومان</span>
+              <span>{irrToTomanText(entry.value)} تومان</span>
             </div>
           ))}
         </div>
@@ -357,7 +371,7 @@ const NextDayForecast = function NextDayForecast({ aiConfig }: { aiConfig: any }
               
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">مظنه فعلی آبشده (ریال) *</label>
+                  <label className="block text-xs text-gray-400 mb-1">مظنه فعلی آبشده (تومان) *</label>
                   <input type="number" className="w-full bg-black/40 border border-gray-700/50 rounded-lg p-2.5 text-sm text-white" 
                     value={inputData.meltedGold || ""} onChange={e => setInputData({...inputData, meltedGold: e.target.valueAsNumber})} />
                   <AutofillMeta fieldKey="meltedGoldMazaneh" autofillData={autofillData} />
@@ -369,13 +383,13 @@ const NextDayForecast = function NextDayForecast({ aiConfig }: { aiConfig: any }
                   <AutofillMeta fieldKey="xauusd" autofillData={autofillData} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">دلار آزاد (ریال) *</label>
+                  <label className="block text-xs text-gray-400 mb-1">دلار آزاد (تومان) *</label>
                   <input type="number" className="w-full bg-black/40 border border-gray-700/50 rounded-lg p-2.5 text-sm text-white" 
                     value={inputData.usdIrt || ""} onChange={e => setInputData({...inputData, usdIrt: e.target.valueAsNumber})} />
                   <AutofillMeta fieldKey="usdIrt" autofillData={autofillData} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">تتر (USDT)</label>
+                  <label className="block text-xs text-gray-400 mb-1">تتر (تومان)</label>
                   <input type="number" className="w-full bg-black/40 border border-gray-700/50 rounded-lg p-2.5 text-sm text-white" 
                     value={inputData.usdtIrt || ""} onChange={e => setInputData({...inputData, usdtIrt: e.target.valueAsNumber})} />
                   <AutofillMeta fieldKey="usdtIrt" autofillData={autofillData} />
@@ -385,24 +399,24 @@ const NextDayForecast = function NextDayForecast({ aiConfig }: { aiConfig: any }
               <h3 className="text-sm font-bold text-white mb-4 mt-6">داده‌های تکمیلی بازار</h3>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">طلای ۱۸ عیار</label>
+                  <label className="block text-xs text-gray-400 mb-1">طلای ۱۸ عیار (تومان)</label>
                   <input type="number" className="w-full bg-black/40 border border-gray-700/50 rounded-lg p-2.5 text-sm text-white" 
                     value={inputData.gold18k || ""} onChange={e => setInputData({...inputData, gold18k: e.target.valueAsNumber})} />
                   <AutofillMeta fieldKey="gold18k" autofillData={autofillData} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">سکه امامی</label>
+                  <label className="block text-xs text-gray-400 mb-1">سکه امامی (تومان)</label>
                   <input type="number" className="w-full bg-black/40 border border-gray-700/50 rounded-lg p-2.5 text-sm text-white" 
                     value={inputData.emamiCoin || ""} onChange={e => setInputData({...inputData, emamiCoin: e.target.valueAsNumber})} />
                   <AutofillMeta fieldKey="emamiCoin" autofillData={autofillData} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">سقف امروز</label>
+                  <label className="block text-xs text-gray-400 mb-1">سقف امروز (تومان)</label>
                   <input type="number" className="w-full bg-black/40 border border-gray-700/50 rounded-lg p-2.5 text-sm text-white" 
                     value={inputData.todayHigh || ""} onChange={e => setInputData({...inputData, todayHigh: e.target.valueAsNumber})} />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">کف امروز</label>
+                  <label className="block text-xs text-gray-400 mb-1">کف امروز (تومان)</label>
                   <input type="number" className="w-full bg-black/40 border border-gray-700/50 rounded-lg p-2.5 text-sm text-white" 
                     value={inputData.todayLow || ""} onChange={e => setInputData({...inputData, todayLow: e.target.valueAsNumber})} />
                 </div>
@@ -484,15 +498,15 @@ const NextDayForecast = function NextDayForecast({ aiConfig }: { aiConfig: any }
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className="bg-black/40 border border-gray-800/60 rounded-xl p-4">
                     <span className="text-xs text-gray-500 block mb-1">کف پیش‌بینی شده</span>
-                    <span className="text-lg font-bold text-red-400">{currentForecast.tomorrowForecast?.low || currentForecast.rangeLow?.toLocaleString()}</span>
+                    <span className="text-lg font-bold text-red-400">{irrToTomanText(currentForecast.tomorrowForecast?.low ?? currentForecast.rangeLow)}</span>
                   </div>
                   <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4">
                     <span className="text-xs text-amber-500/70 block mb-1">محدوده مرکزی (محور)</span>
-                    <span className="text-2xl font-black text-amber-400">{currentForecast.tomorrowForecast?.centralEstimate || currentForecast.midPoint?.toLocaleString()}</span>
+                    <span className="text-2xl font-black text-amber-400">{irrToTomanText(currentForecast.tomorrowForecast?.centralEstimate ?? currentForecast.midPoint)} <span className="text-xs font-normal text-gray-500">تومان</span></span>
                   </div>
                   <div className="bg-black/40 border border-gray-800/60 rounded-xl p-4">
                     <span className="text-xs text-gray-500 block mb-1">سقف پیش‌بینی شده</span>
-                    <span className="text-lg font-bold text-emerald-400">{currentForecast.tomorrowForecast?.high || currentForecast.rangeHigh?.toLocaleString()}</span>
+                    <span className="text-lg font-bold text-emerald-400">{irrToTomanText(currentForecast.tomorrowForecast?.high ?? currentForecast.rangeHigh)}</span>
                   </div>
                 </div>
 
@@ -540,25 +554,25 @@ const NextDayForecast = function NextDayForecast({ aiConfig }: { aiConfig: any }
                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
                         <div>
                            <span className="block text-[10px] text-gray-500 mb-1">حمایت ۱</span>
-                           <span className="text-xs font-medium text-emerald-400">{currentForecast.supportLevels?.[0] || "-"}</span>
+                           <span className="text-xs font-medium text-emerald-400">{irrToTomanText(currentForecast.supportLevels?.[0])}</span>
                         </div>
                         <div>
                            <span className="block text-[10px] text-gray-500 mb-1">حمایت ۲</span>
-                           <span className="text-xs font-medium text-emerald-400/70">{currentForecast.supportLevels?.[1] || "-"}</span>
+                           <span className="text-xs font-medium text-emerald-400/70">{irrToTomanText(currentForecast.supportLevels?.[1])}</span>
                         </div>
                         <div>
                            <span className="block text-[10px] text-gray-500 mb-1">مقاومت ۱</span>
-                           <span className="text-xs font-medium text-red-400">{currentForecast.resistanceLevels?.[0] || "-"}</span>
+                           <span className="text-xs font-medium text-red-400">{irrToTomanText(currentForecast.resistanceLevels?.[0])}</span>
                         </div>
                         <div>
                            <span className="block text-[10px] text-gray-500 mb-1">مقاومت ۲</span>
-                           <span className="text-xs font-medium text-red-400/70">{currentForecast.resistanceLevels?.[1] || "-"}</span>
+                           <span className="text-xs font-medium text-red-400/70">{irrToTomanText(currentForecast.resistanceLevels?.[1])}</span>
                         </div>
                      </div>
                      {currentForecast.invalidationLevel && (
                         <div className="mt-4 pt-4 border-t border-gray-800/50 text-center">
                            <span className="text-[10px] text-gray-500">حد ابطال سناریو (تغییر روند): </span>
-                           <span className="text-xs font-bold text-amber-500">{currentForecast.invalidationLevel}</span>
+                           <span className="text-xs font-bold text-amber-500">{irrToTomanText(currentForecast.invalidationLevel)} تومان</span>
                         </div>
                      )}
                   </div>
@@ -679,9 +693,9 @@ const NextDayForecast = function NextDayForecast({ aiConfig }: { aiConfig: any }
                   history.slice().reverse().map((item, i) => (
                     <tr key={item.id || i} className="hover:bg-white/[0.02] transition-colors">
                       <td className="p-4"><ShamsiDateDisplay date={item.date} /></td>
-                      <td className="p-4 text-gray-300">{item.closePrice.toLocaleString()}</td>
-                      <td className="p-4 text-amber-500">{item.midPoint.toLocaleString()}</td>
-                      <td className="p-4 text-gray-400 text-xs">{item.rangeLow.toLocaleString()} - {item.rangeHigh.toLocaleString()}</td>
+                      <td className="p-4 text-gray-300">{irrToTomanText(item.closePrice)}</td>
+                      <td className="p-4 text-amber-500">{irrToTomanText(item.midPoint)}</td>
+                      <td className="p-4 text-gray-400 text-xs">{irrToTomanText(item.rangeLow)} - {irrToTomanText(item.rangeHigh)}</td>
                       <td className="p-4">
                         {item.actualData ? (
                            <div className="flex items-center gap-2 text-[#10b981]">

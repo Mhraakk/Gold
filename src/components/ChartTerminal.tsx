@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from "react";
 import { Candle, MarketStructure, AssetId } from "../types";
 import { ASSETS_METADATA } from "../data";
+import { formatAssetAmount, priceUnitLabel } from "../utils/priceDisplay";
 import { Eye, EyeOff, ZoomIn, ZoomOut, Move, TrendingUp, Sparkles, RefreshCw } from "lucide-react";
 
 interface ChartTerminalProps {
@@ -501,7 +502,7 @@ const ChartTerminal = function ChartTerminal({
       const priceGrids = [minPrice, minPrice + priceDiff * 0.25, minPrice + priceDiff * 0.5, minPrice + priceDiff * 0.75, maxPrice];
       priceGrids.forEach((pg) => {
         const yGrid = getY(pg);
-        ctx.fillText(pg.toLocaleString(undefined, { maximumFractionDigits: meta.decimals }), width - 64, yGrid + 3);
+        ctx.fillText(formatAssetAmount(assetId, pg), width - 64, yGrid + 3);
       });
 
       // Highlight current active price on right bar
@@ -519,7 +520,7 @@ const ChartTerminal = function ChartTerminal({
         ctx.fillStyle = "#D4AF37";
         ctx.font = "bold 9px 'JetBrains Mono', monospace";
         ctx.fillText(
-          lastCandle.close.toLocaleString(undefined, { maximumFractionDigits: meta.decimals }),
+          formatAssetAmount(assetId, lastCandle.close),
           width - 66,
           cyLastPrice + 2
         );
@@ -576,7 +577,7 @@ const ChartTerminal = function ChartTerminal({
         ctx.fillStyle = "#D4AF37";
         ctx.font = "bold 8px 'JetBrains Mono', monospace";
         ctx.fillText(
-          crosshairPrice.toLocaleString(undefined, { maximumFractionDigits: meta.decimals }),
+          formatAssetAmount(assetId, crosshairPrice),
           width - 66,
           crosshairRef.current!.y + 4
         );
@@ -758,10 +759,11 @@ const ChartTerminal = function ChartTerminal({
         {hoveredCandle ? (
           <>
             <div className="flex gap-4">
-              <span>O: <span className="text-gray-300 tabular-nums">{hoveredCandle.open.toLocaleString()}</span></span>
-              <span>H: <span className="text-emerald-500 tabular-nums">{hoveredCandle.high.toLocaleString()}</span></span>
-              <span>L: <span className="text-rose-500 tabular-nums">{hoveredCandle.low.toLocaleString()}</span></span>
-              <span>C: <span className="text-gray-300 tabular-nums">{hoveredCandle.close.toLocaleString()}</span></span>
+              <span>O: <span className="text-gray-300 tabular-nums">{formatAssetAmount(assetId, hoveredCandle.open)}</span></span>
+              <span>H: <span className="text-emerald-500 tabular-nums">{formatAssetAmount(assetId, hoveredCandle.high)}</span></span>
+              <span>L: <span className="text-rose-500 tabular-nums">{formatAssetAmount(assetId, hoveredCandle.low)}</span></span>
+              <span>C: <span className="text-gray-300 tabular-nums">{formatAssetAmount(assetId, hoveredCandle.close)}</span></span>
+              <span className="text-gray-600">({priceUnitLabel(assetId)})</span>
             </div>
             <div className="h-3 w-[1px] bg-white/10"></div>
             <span>V: <span className="text-gray-400 tabular-nums">{hoveredCandle.volume.toLocaleString()}</span></span>
@@ -802,7 +804,7 @@ const ChartTerminal = function ChartTerminal({
         <div className="space-y-1">
           <span className="text-[9px] text-gray-500 uppercase tracking-tighter">محدوده بحرانی</span>
           <div className="text-[11px] font-bold text-gray-200 tabular-nums">
-            {marketStructure.fvgs?.[0]?.highPrice.toLocaleString() || "---"}
+            {marketStructure.fvgs?.[0] ? `${formatAssetAmount(assetId, marketStructure.fvgs[0].highPrice)} ${priceUnitLabel(assetId)}` : "---"}
           </div>
         </div>
         <div className="space-y-1">

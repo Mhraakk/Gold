@@ -2,6 +2,10 @@ import React, { useState, useEffect } from "react";
 import { Info, TrendingUp, TrendingDown, Activity, AlertCircle, RefreshCw, Save, Clock, ChevronRight, BarChart2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine, Area, AreaChart, ComposedChart } from "recharts";
 
+// Server inputs/outputs are IRR; this panel shows and accepts Toman.
+const irrToTomanText = (irr: number | string) => Math.round(Number(irr) / 10).toLocaleString();
+const irrToTomanInput = (irr?: string) => (irr ? String(Math.round(Number(irr) / 10)) : "");
+
 export default function MeltedGoldForecast() {
   const [activeSubTab, setActiveSubTab] = useState<"auto" | "custom">("auto");
   const [horizon, setHorizon] = useState<number>(7);
@@ -36,8 +40,8 @@ export default function MeltedGoldForecast() {
       if (data.fields) {
         setCustomInputs(prev => ({
           ...prev,
-          currentMazaneh: data.fields.meltedGoldMazaneh?.value || "",
-          usdRate: data.fields.usdIrt?.value || "",
+          currentMazaneh: irrToTomanInput(data.fields.meltedGoldMazaneh?.value),
+          usdRate: irrToTomanInput(data.fields.usdIrt?.value),
           ounceRate: data.fields.xauusd?.value || ""
         }));
       }
@@ -56,7 +60,12 @@ export default function MeltedGoldForecast() {
       }
 
       const endpoint = type === "auto" ? "/api/forecast/mazaneh/run" : "/api/forecast/mazaneh/custom";
-      const body = type === "auto" ? { horizon: finalHorizon, autoData } : { horizon: finalHorizon, customInputs };
+      const customIrr = {
+        ...customInputs,
+        currentMazaneh: customInputs.currentMazaneh ? String(Number(customInputs.currentMazaneh) * 10) : "",
+        usdRate: customInputs.usdRate ? String(Number(customInputs.usdRate) * 10) : "",
+      };
+      const body = type === "auto" ? { horizon: finalHorizon, autoData } : { horizon: finalHorizon, customInputs: customIrr };
       
       const res = await fetch(endpoint, {
         method: "POST",
@@ -136,14 +145,14 @@ export default function MeltedGoldForecast() {
                   <div className="p-3 bg-white/5 rounded-lg">
                     <div className="text-xs text-gray-400 mb-1">مظنه فعلی (آبشده نقدی)</div>
                     <div className="text-lg font-bold text-white flex items-center gap-2">
-                      {autoData.fields?.meltedGoldMazaneh ? parseFloat(autoData.fields.meltedGoldMazaneh.value).toLocaleString() : "---"} تومان
+                      {autoData.fields?.meltedGoldMazaneh ? irrToTomanText(autoData.fields.meltedGoldMazaneh.value) : "---"} تومان
                       {autoData.fields?.meltedGoldMazaneh && renderDataQuality(autoData.fields.meltedGoldMazaneh.validationStatus)}
                     </div>
                   </div>
                   <div className="p-3 bg-white/5 rounded-lg">
                     <div className="text-xs text-gray-400 mb-1">دلار بازار آزاد</div>
                     <div className="text-lg font-bold text-white flex items-center gap-2">
-                      {autoData.fields?.usdIrt ? parseFloat(autoData.fields.usdIrt.value).toLocaleString() : "---"} تومان
+                      {autoData.fields?.usdIrt ? irrToTomanText(autoData.fields.usdIrt.value) : "---"} تومان
                     </div>
                   </div>
                   <div className="p-3 bg-white/5 rounded-lg">
@@ -237,7 +246,7 @@ export default function MeltedGoldForecast() {
                 <div>
                   <label className="block text-xs text-gray-400 mb-1">مظنه فعلی (تومان)</label>
                   <input type="number" value={customInputs.currentMazaneh} onChange={e => setCustomInputs({...customInputs, currentMazaneh: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-3 text-white focus:border-indigo-500 outline-none" />
-                  <div className="text-[10px] text-gray-500 mt-1">آخرین مقدار: {autoData?.fields?.meltedGoldMazaneh?.value || "---"}</div>
+                  <div className="text-[10px] text-gray-500 mt-1">آخرین مقدار: {autoData?.fields?.meltedGoldMazaneh?.value ? `${irrToTomanText(autoData.fields.meltedGoldMazaneh.value)} تومان` : "---"}</div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -335,12 +344,12 @@ export default function MeltedGoldForecast() {
                 <div className="absolute top-0 right-0 w-32 h-32 bg-[#D4AF37]/10 blur-3xl rounded-full"></div>
                 <div className="text-sm text-gray-400 mb-2">پیش‌بینی مرکزی (محتمل‌ترین)</div>
                 <div className="text-3xl font-black text-white tracking-tight">
-                  {forecastResult.centralForecast.toLocaleString()} <span className="text-lg font-normal text-gray-400">تومان</span>
+                  {irrToTomanText(forecastResult.centralForecast)} <span className="text-lg font-normal text-gray-400">تومان</span>
                 </div>
                 <div className="mt-4 flex items-center justify-between text-sm">
                   <span className="text-gray-400">تغییر نسبت به مبنا:</span>
                   <span className={`font-bold ${forecastResult.changeValue > 0 ? "text-emerald-400" : forecastResult.changeValue < 0 ? "text-red-400" : "text-gray-400"}`}>
-                    {forecastResult.changeValue > 0 ? "+" : ""}{forecastResult.changeValue.toLocaleString()} ({forecastResult.changePercent}%)
+                    {forecastResult.changeValue > 0 ? "+" : ""}{irrToTomanText(forecastResult.changeValue)} تومان ({forecastResult.changePercent}%)
                   </span>
                 </div>
               </div>
@@ -350,7 +359,7 @@ export default function MeltedGoldForecast() {
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-gray-400">بازه ۸۰٪ (محتمل)</span>
                     <span className="text-gray-300">
-                      {forecastResult.band80.low.toLocaleString()} تا {forecastResult.band80.high.toLocaleString()}
+                      {irrToTomanText(forecastResult.band80.low)} تا {irrToTomanText(forecastResult.band80.high)} تومان
                     </span>
                   </div>
                   <div className="w-full bg-black/50 rounded-full h-1.5">
@@ -361,7 +370,7 @@ export default function MeltedGoldForecast() {
                   <div className="flex justify-between text-xs mb-1">
                     <span className="text-gray-400">بازه ۹۵٪ (حداکثر نوسان)</span>
                     <span className="text-gray-300">
-                      {forecastResult.band95.low.toLocaleString()} تا {forecastResult.band95.high.toLocaleString()}
+                      {irrToTomanText(forecastResult.band95.low)} تا {irrToTomanText(forecastResult.band95.high)} تومان
                     </span>
                   </div>
                   <div className="w-full bg-black/50 rounded-full h-1.5">
@@ -399,11 +408,11 @@ export default function MeltedGoldForecast() {
                     <ComposedChart data={forecastResult.chartData} margin={{ top: 10, right: 10, left: 20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                       <XAxis dataKey="date" stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} />
-                      <YAxis domain={['auto', 'auto']} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} tickFormatter={(val) => (val/1000000).toFixed(1) + 'm'} />
+                      <YAxis domain={['auto', 'auto']} stroke="rgba(255,255,255,0.2)" tick={{ fill: "rgba(255,255,255,0.4)", fontSize: 11 }} tickFormatter={(val) => (val / 10 / 1000000).toFixed(1) + 'm'} />
                       <RechartsTooltip
                         contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px' }}
                         itemStyle={{ color: '#fff' }}
-                        formatter={(value: any, name: string) => [value.toLocaleString(), name === 'price' ? 'قیمت' : name]}
+                        formatter={(value: any, name: string) => [Array.isArray(value) ? value.map(irrToTomanText).join(" – ") : `${irrToTomanText(value)} تومان`, name === 'price' ? 'قیمت' : name]}
                       />
                       <Area type="monotone" dataKey="band95" stroke="none" fill="#4f46e5" fillOpacity={0.1} />
                       <Area type="monotone" dataKey="band80" stroke="none" fill="#3b82f6" fillOpacity={0.15} />

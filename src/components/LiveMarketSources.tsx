@@ -283,14 +283,14 @@ const LiveMarketSources = function LiveMarketSources({ onDataUpdate }: { onDataU
   };
 
   // Precise Iranian monetary formatter complying with TEST 1 and TEST 2
-  const formatIranValue = (irrValue: number, assetKey: string, assetLabelFa: string, sourceName: string, fetchedAt: number) => {
+  const formatIranValue = (irrValue: number, assetKey: string, assetLabelFa: string, sourceName: string, fetchedAt: number, nativeUnit: string) => {
     const timeStr = new Date(fetchedAt).toLocaleTimeString("fa-IR", { timeZone: "Asia/Tehran" });
     const res = formatFinancialValue(irrValue, assetKey, assetLabelFa, sourceName, timeStr);
     return {
       primary: res.primary,
       secondary: res.secondary,
       subtext: `منبع: ${res.source} | زمان: ${res.timestamp} | دارایی: ${res.assetNameFa} | واحد: ${res.unit}`,
-      rawUnit: assetKey === "melted_gold" ? "ریال (IRR)" : "تومان (TOMAN)",
+      rawUnit: nativeUnit === "IRR" ? "ریال (IRR)" : nativeUnit === "TOMAN" ? "تومان (TOMAN)" : nativeUnit,
       stdUnit: res.unit
     };
   };
@@ -455,7 +455,7 @@ const LiveMarketSources = function LiveMarketSources({ onDataUpdate }: { onDataU
                           // Precise formatter for Iran
                           const parseRes = isUsd 
                             ? { primary: asset.marketNotation, secondary: "تتر مرجع جهانی (بدون تبدیل تومانی)", subtext: `منبع: ${asset.sourceName} | زمان: ${new Date(asset.fetchedAt).toLocaleTimeString("fa-IR", { timeZone: "Asia/Tehran" })} | دارایی: ${asset.assetLabelFa} | واحد: USD`, rawUnit: "USD", stdUnit: "USD" }
-                            : formatIranValue(asset.canonicalIrrValue, asset.assetKey, asset.assetLabelFa, asset.sourceName, asset.fetchedAt);
+                            : formatIranValue(asset.canonicalIrrValue, asset.assetKey, asset.assetLabelFa, asset.sourceName, asset.fetchedAt, asset.sourceNativeUnit);
 
                           return (
                             <div key={asset.assetKey} className="bg-black/30 border border-gray-800/50 rounded-lg p-3 hover:bg-black/50 transition-all">

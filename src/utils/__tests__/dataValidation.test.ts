@@ -25,13 +25,29 @@ describe('Telegram Parsing (@abshdh)', () => {
 });
 
 describe('Data Validation & Canonicalization', () => {
-  it('formats 79,600,000 IRR correctly', () => {
-    const normalized = validateAndNormalizePrice('MELTED_GOLD', 79600000, 'IRR', '@abshdh');
+  // @abshdh quotes Toman: "آبشده 79,600,000" = 796,000,000 IRR = مظنه 79.60
+  it('converts a Telegram Toman quote to IRR and keeps the mazaneh notation', () => {
+    const normalized = validateAndNormalizePrice('MELTED_GOLD', 79600000, 'TOMAN', '@abshdh');
     expect(normalized.validationStatus).toBe('valid');
-    expect(normalized.canonicalValue).toBe(79600000);
+    expect(normalized.canonicalValue).toBe(796000000);
     expect(normalized.canonicalCurrency).toBe('IRR');
     expect(normalized.displayValue).toBe('79.60');
+    expect(normalized.displayUnit).toBe('میلیون تومان');
     expect(normalized.marketNotation).toBe('مظنه 79.60');
+  });
+
+  it('accepts current live prices in IRR (TGJU, Oct 2026)', () => {
+    expect(validateAndNormalizePrice('MELTED_GOLD', 1154020000, 'IRR', 'TGJU').displayValue).toBe('115.40');
+    expect(validateAndNormalizePrice('MELTED_GOLD', 1154020000, 'IRR', 'TGJU').validationStatus).toBe('valid');
+    expect(validateAndNormalizePrice('USDIRT', 2711800, 'IRR', 'TGJU').displayValue).toBe('271,180');
+    expect(validateAndNormalizePrice('GOLD_18K', 266395000, 'IRR', 'TGJU').validationStatus).toBe('valid');
+    expect(validateAndNormalizePrice('GOLD_24K', 355190000, 'IRR', 'TGJU').validationStatus).toBe('valid');
+  });
+
+  it('rejects a Toman figure mislabelled as IRR', () => {
+    // 115,350,000 is the Telegram Toman quote; as IRR it would be a 10x-too-low mesghal
+    expect(validateAndNormalizePrice('MELTED_GOLD', 115350000, 'IRR', 'Test').validationStatus).toBe('malformed');
+    expect(validateAndNormalizePrice('USDIRT', 27118, 'TOMAN', 'Test').validationStatus).toBe('malformed');
   });
 
   it('formats 1740000000 IRR for COIN_EMAMI correctly', () => {
@@ -40,13 +56,6 @@ describe('Data Validation & Canonicalization', () => {
     expect(normalized.canonicalValue).toBe(1740000000);
     expect(normalized.displayValue).toBe('174,000,000');
     expect(normalized.displayUnit).toBe('تومان');
-  });
-
-  it('converts TOMAN to IRR correctly', () => {
-    const normalized = validateAndNormalizePrice('MELTED_GOLD', 7960000, 'TOMAN', 'Manual');
-    expect(normalized.validationStatus).toBe('valid');
-    expect(normalized.canonicalValue).toBe(79600000);
-    expect(normalized.canonicalCurrency).toBe('IRR');
   });
 
   it('rejects UNKNOWN units', () => {

@@ -18,6 +18,12 @@ import {
 } from "lucide-react";
 import { Candle, AssetId } from "../types";
 import { calculateRSI, calculateEMA, calculateATR } from "../services/aiEngine";
+import { formatAssetAmount, fromDisplayUnit, priceUnitLabel, toDisplayUnit } from "../utils/priceDisplay";
+
+// Metrics measured in price units. Their rule values are typed in Toman (USD for
+// global assets) and stored in the app's price unit (IRR), like prices.
+const PRICE_METRICS = ["price", "ema20", "ema50", "atr"];
+const isPriceMetric = (metric: string) => PRICE_METRICS.includes(metric);
 
 export interface StrategyRule {
   id: string;
@@ -101,7 +107,8 @@ export function evaluateStrategyRule(rule: StrategyRule, candles: Candle[], curr
   return { isTriggered, val1, val2 };
 }
 
-// Default presets for outstanding user onboarding
+// Default presets for outstanding user onboarding. Values of price metrics are
+// multiples of the live price (e.g. 0.99 = 1% below), resolved when applied.
 const PRESET_TEMPLATES: Omit<StrategyRule, "id" | "createdAt" | "isActive">[] = [
   {
     name: "فشار صعودی اشباع فروش SMC",
@@ -111,7 +118,7 @@ const PRESET_TEMPLATES: Omit<StrategyRule, "id" | "createdAt" | "isActive">[] = 
     cond1Value: 30,
     cond2Metric: "price",
     cond2Op: ">",
-    cond2Value: 18000000,
+    cond2Value: 0.99,
     actionSignal: "BUY",
   },
   {
@@ -119,10 +126,10 @@ const PRESET_TEMPLATES: Omit<StrategyRule, "id" | "createdAt" | "isActive">[] = 
     conditionType: "and",
     cond1Metric: "atr",
     cond1Op: ">",
-    cond1Value: 25000,
+    cond1Value: 0.004,
     cond2Metric: "price",
     cond2Op: ">",
-    cond2Value: 18500000,
+    cond2Value: 1.0,
     actionSignal: "ALERT",
   },
   {
@@ -130,7 +137,7 @@ const PRESET_TEMPLATES: Omit<StrategyRule, "id" | "createdAt" | "isActive">[] = 
     conditionType: "and",
     cond1Metric: "price",
     cond1Op: ">",
-    cond1Value: 18200000,
+    cond1Value: 0.995,
     cond2Metric: "rsi",
     cond2Op: "<",
     cond2Value: 45,
@@ -144,7 +151,7 @@ const PRESET_TEMPLATES: Omit<StrategyRule, "id" | "createdAt" | "isActive">[] = 
     cond1Value: 70,
     cond2Metric: "price",
     cond2Op: ">",
-    cond2Value: 19000000,
+    cond2Value: 1.02,
     actionSignal: "SELL",
   }
 ];
@@ -222,10 +229,10 @@ const StrategyBuilder = function StrategyBuilder({
       conditionType: newCondType,
       cond1Metric: newCond1Metric,
       cond1Op: newCond1Op,
-      cond1Value: Number(newCond1Value) || 0,
+      cond1Value: isPriceMetric(newCond1Metric) ? fromDisplayUnit(activeAssetId, Number(newCond1Value) || 0) : Number(newCond1Value) || 0,
       cond2Metric: newCond2Metric,
       cond2Op: newCond2Op,
-      cond2Value: Number(newCond2Value) || 0,
+      cond2Value: isPriceMetric(newCond2Metric) ? fromDisplayUnit(activeAssetId, Number(newCond2Value) || 0) : Number(newCond2Value) || 0,
       actionSignal: newActionSignal,
       isActive: true,
       createdAt: new Date().toISOString()
@@ -246,10 +253,12 @@ const StrategyBuilder = function StrategyBuilder({
     setNewCondType(preset.conditionType);
     setNewCond1Metric(preset.cond1Metric);
     setNewCond1Op(preset.cond1Op);
-    setNewCond1Value(preset.cond1Value);
+    const resolve = (metric: string, v: number) =>
+      isPriceMetric(metric) ? Math.round(toDisplayUnit(activeAssetId, currentPrice * v)) : v;
+    setNewCond1Value(resolve(preset.cond1Metric, preset.cond1Value));
     setNewCond2Metric(preset.cond2Metric);
     setNewCond2Op(preset.cond2Op);
-    setNewCond2Value(preset.cond2Value);
+    setNewCond2Value(resolve(preset.cond2Metric, preset.cond2Value));
     setNewActionSignal(preset.actionSignal);
     
     setSuccessMsg(`الگوی پیش‌فرض "${preset.name}" بارگذاری شد!`);
@@ -287,8 +296,8 @@ const StrategyBuilder = function StrategyBuilder({
   const formatMetricDisplay = (metric: string, val: number | undefined) => {
     if (val === undefined) return "N/A";
     if (metric === "rsi") return `${val.toFixed(1)}%`;
-    if (metric === "price" || metric === "ema20" || metric === "ema50" || metric === "atr") {
-      return val.toLocaleString(undefined, { maximumFractionDigits: 1 });
+    if (isPriceMetric(metric)) {
+      return `${formatAssetAmount(activeAssetId, val)} ${priceUnitLabel(activeAssetId)}`;
     }
     return val.toLocaleString();
   };
@@ -431,6 +440,7 @@ const StrategyBuilder = function StrategyBuilder({
                   <input
                     type="number"
                     value={newCond1Value}
+                    placeholder={isPriceMetric(newCond1Metric) ? priceUnitLabel(activeAssetId) : ""}
                     onChange={(e) => setNewCond1Value(parseFloat(e.target.value))}
                     className="w-full bg-black/40 border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/40 data-value text-[11px] text-center"
                   />
@@ -515,6 +525,7 @@ const StrategyBuilder = function StrategyBuilder({
                     <input
                       type="number"
                       value={newCond2Value}
+                      placeholder={isPriceMetric(newCond2Metric) ? priceUnitLabel(activeAssetId) : ""}
                       onChange={(e) => setNewCond2Value(parseFloat(e.target.value))}
                       className="w-full bg-black/40 border border-white/5 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500/40 data-value text-[11px] text-center"
                     />
@@ -567,7 +578,7 @@ const StrategyBuilder = function StrategyBuilder({
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 font-sans text-center">
               <div className="bg-black/40 p-2 rounded-lg border border-white/5">
                 <span className="text-[9px] text-gray-500 block">قیمت فعلی</span>
-                <span className="text-white text-xs font-bold data-value text-[11px]">{currentPrice.toLocaleString()}</span>
+                <span className="text-white text-xs font-bold data-value text-[11px]">{formatAssetAmount(activeAssetId, currentPrice)} {priceUnitLabel(activeAssetId)}</span>
               </div>
               <div className="bg-black/40 p-2 rounded-lg border border-white/5">
                 <span className="text-[9px] text-gray-500 block">RSI (۱۴ روزه)</span>
@@ -649,7 +660,7 @@ const StrategyBuilder = function StrategyBuilder({
                           <span className="text-[var(--accent-gold)] font-bold">{rule.cond1Metric.toUpperCase()}</span>
                           <span className="text-gray-400">({formatMetricDisplay(rule.cond1Metric, rule.val1)})</span>
                           <span className="font-bold text-white">{rule.cond1Op}</span>
-                          <span className="text-indigo-400 font-bold">{rule.cond1Value.toLocaleString()}</span>
+                          <span className="text-indigo-400 font-bold">{isPriceMetric(rule.cond1Metric) ? formatAssetAmount(activeAssetId, rule.cond1Value) : rule.cond1Value.toLocaleString()}</span>
 
                           {rule.cond2Metric !== "none" && (
                             <>
@@ -657,7 +668,7 @@ const StrategyBuilder = function StrategyBuilder({
                               <span className="text-[var(--accent-gold)] font-bold">{rule.cond2Metric.toUpperCase()}</span>
                               <span className="text-gray-400">({formatMetricDisplay(rule.cond2Metric, rule.val2)})</span>
                               <span className="font-bold text-white">{rule.cond2Op}</span>
-                              <span className="text-indigo-400 font-bold">{rule.cond2Value.toLocaleString()}</span>
+                              <span className="text-indigo-400 font-bold">{isPriceMetric(rule.cond2Metric) ? formatAssetAmount(activeAssetId, rule.cond2Value) : rule.cond2Value.toLocaleString()}</span>
                             </>
                           )}
                         </div>

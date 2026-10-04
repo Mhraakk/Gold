@@ -15,6 +15,7 @@ import {
 import { AssetInfo, Candle, AssetId } from "../types";
 import { calculateATR } from "../services/aiEngine";
 import { ASSETS_METADATA } from "../data";
+import { formatAssetAmount, formatAssetPrice, priceUnitLabel } from "../utils/priceDisplay";
 
 interface VolatilityHeatmapProps {
   assets: AssetInfo[];
@@ -305,7 +306,7 @@ export default function VolatilityHeatmap({
                     <div className="space-y-0.5">
                       <h4 className="text-xs font-bold text-white leading-tight group-hover:text-amber-400 transition">{item.persianName}</h4>
                       <p className="text-[10px] text-gray-400 font-mono">
-                        {item.currentPrice.toLocaleString()} {item.unit.split(" / ")[0]}
+                        {formatAssetPrice(item.id, item.currentPrice, { withUnit: true })}
                       </p>
                     </div>
 
@@ -347,7 +348,7 @@ export default function VolatilityHeatmap({
                 <div className="bg-black/20 border border-white/5 p-2.5 rounded-lg border border-gray-900 flex justify-between items-center">
                   <span className="text-gray-500">نوسانات ATR (۱۴ روزه)</span>
                   <span className="text-white font-bold text-right">
-                    {selectedItem.currentATR.toLocaleString(undefined, { maximumFractionDigits: selectedItem.decimals })}
+                    {formatAssetAmount(selectedItem.id, selectedItem.currentATR)} {priceUnitLabel(selectedItem.id)}
                   </span>
                 </div>
 

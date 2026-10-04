@@ -8,29 +8,30 @@ export default function MazanehDealerDecisionDesk() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // In a real integration, we'd fetch actual verified historical data.
-    // For now, we simulate loading the verified ticks to satisfy the deterministic engine.
-    const runAnalysis = () => {
+    // Hourly melted-gold closes recorded by the server from live TGJU quotes
+    // (Toman), converted to IRR ticks for the deterministic engine.
+    const runAnalysis = async () => {
       setLoading(true);
       try {
-        const mockTicks: VerifiedTick[] = Array.from({ length: 15 }).map((_, i) => ({
+        const res = await fetch("/api/market/history?asset=mesghal&days=7&bucketMinutes=60");
+        const history = await res.json();
+        const ticks: VerifiedTick[] = (history.points || []).map((p: { t: number; v: number }, i: number) => ({
           id: `tick_${i}`,
-          timestamp: Date.now() - (15 - i) * 86400000,
-          priceString: (180000000 + i * 500000 - (i % 3) * 200000).toString(),
+          timestamp: p.t,
+          priceString: Math.round(p.v * 10).toString(),
           assetKey: "melted_gold",
           isCash: true
         }));
 
         const input: AnalysisInput = {
           horizon: "1W",
-          mazannehTicks: mockTicks,
+          mazannehTicks: ticks,
           driverSeries: {
             GOLD_18K: []
           }
         };
 
-        const res = analyzeMazanehLongTerm(input);
-        setResult(res);
+        setResult(analyzeMazanehLongTerm(input));
       } catch (err) {
         console.error(err);
       } finally {
@@ -38,8 +39,7 @@ export default function MazanehDealerDecisionDesk() {
       }
     };
     
-    // Simulate network delay
-    setTimeout(runAnalysis, 500);
+    runAnalysis();
   }, []);
 
   if (loading) {
@@ -77,7 +77,11 @@ export default function MazanehDealerDecisionDesk() {
           <AlertTriangle className="w-5 h-5 shrink-0" />
           <div>
             <div className="font-bold mb-1">عدم دسترسی به تحلیل (Ineligible)</div>
-            <div className="text-xs">{result.ineligibilityReason}</div>
+            <div className="text-xs">
+              {result.ineligibilityReason?.startsWith("Insufficient verified history")
+                ? "تاریخچه کافی ثبت نشده است: این تحلیل به حداقل ۱۰ قیمت ساعتی آبشده نیاز دارد که سرور از داده زنده ثبت می‌کند. چند ساعت پس از روشن ماندن سرور در دسترس خواهد بود."
+                : result.ineligibilityReason}
+            </div>
           </div>
         </div>
       ) : (

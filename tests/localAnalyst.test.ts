@@ -125,7 +125,10 @@ describe('localAnalyst: endpoint contracts', () => {
     expect(Math.min(...a.resistanceLevels)).toBeGreaterThan(266395000);
     expect(a.tradeSetup.riskRewardRatio).toBeGreaterThan(0);
     expect(a.confidenceScore).toBeGreaterThanOrEqual(30);
-    expect(a.detailedAnalysisMarkdown).toContain('ریال'); // input was in Rial
+    // App sends Rial: numbers stay in Rial (chart scale), text is written in Toman
+    expect(a.detailedAnalysisMarkdown).toContain('تومان');
+    expect(a.detailedAnalysisMarkdown).not.toContain('ریال');
+    expect(a.tradeSetup.entry).toBeGreaterThan(200_000_000); // still IRR
     expect(a.orderBlocks[0].volume).toContain('در دسترس نیست'); // no invented volume
   });
 

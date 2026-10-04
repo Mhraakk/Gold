@@ -672,28 +672,31 @@ function scenarioTexts(view: AssetView): [string, string, string] {
 // /api/analysis/refresh
 // ---------------------------------------------------------------------------
 
-function resolvePrice(key: MarketKey, appPrice: number, ctx: EngineContext): { price: number; unitLabel: string } {
+// Returns the price to analyse (Toman when the app sent Rial) and the factor
+// that converts analysis numbers back to the app's own scale.
+function resolvePrice(key: MarketKey, appPrice: number, ctx: EngineContext): { price: number; unitLabel: string; toAppScale: number } {
   const live = ctx.snapshot.quotes[key]?.value;
   const unit = MARKET_INFO[key].unit;
   if (appPrice > 0) {
-    if (!live) return { price: appPrice, unitLabel: "" };
+    if (!live) return { price: appPrice, unitLabel: "", toAppScale: 1 };
     const f = alignScale(appPrice, live);
-    if (f === 1) return { price: appPrice, unitLabel: unit };
-    if (f === 0.1 && unit === "تومان") return { price: appPrice, unitLabel: "ریال" };
-    return { price: appPrice, unitLabel: "" };
+    if (f === 1) return { price: appPrice, unitLabel: unit, toAppScale: 1 };
+    if (f === 0.1 && unit === "تومان") return { price: appPrice / 10, unitLabel: unit, toAppScale: 10 };
+    return { price: appPrice, unitLabel: "", toAppScale: 1 };
   }
-  if (live) return { price: live, unitLabel: unit };
+  if (live) return { price: live, unitLabel: unit, toAppScale: 1 };
   throw new Error("قیمت معتبری برای این دارایی در دسترس نیست.");
 }
 
 export function buildSharedAnalysis(params: { assetId: string; currentPrice: number; ctx: EngineContext }) {
   const { assetId, currentPrice, ctx } = params;
   const key = ASSET_ID_TO_KEY[assetId] ?? "gold18";
-  const { price, unitLabel } = resolvePrice(key, currentPrice, ctx);
+  const { price, unitLabel, toAppScale } = resolvePrice(key, currentPrice, ctx);
   const view = analyzeAsset(key, price, unitLabel, ctx);
   const setup = tradeSetup(view);
   const [primary, alternative, invalidation] = scenarioTexts(view);
   const sigma = (price * view.volPct) / 100;
+  const app = (v: number) => v * toAppScale; // numeric fields stay in the app's scale (chart)
   return {
     assetId,
     timestamp: new Date().toISOString(),
@@ -701,18 +704,18 @@ export function buildSharedAnalysis(params: { assetId: string; currentPrice: num
     marketPhase: marketPhase(view),
     confidenceScore: view.confidence,
     probabilityScore: Math.round(clamp(50 + Math.abs(view.score) / 2, 50, 85)),
-    supportLevels: view.supports,
-    resistanceLevels: view.resistances,
+    supportLevels: view.supports.map(app),
+    resistanceLevels: view.resistances.map(app),
     orderBlocks: [
-      { type: "bullish", range: `${formatNumber(niceRound(view.supports[0] - 0.25 * sigma))}-${formatNumber(view.supports[0])}`, volume: "داده حجم در دسترس نیست" },
-      { type: "bearish", range: `${formatNumber(view.resistances[0])}-${formatNumber(niceRound(view.resistances[0] + 0.25 * sigma))}`, volume: "داده حجم در دسترس نیست" },
+      { type: "bullish", range: `${formatNumber(niceRound(view.supports[0] - 0.25 * sigma))}-${formatNumber(view.supports[0])} ${unitLabel}`.trim(), volume: "داده حجم در دسترس نیست" },
+      { type: "bearish", range: `${formatNumber(view.resistances[0])}-${formatNumber(niceRound(view.resistances[0] + 0.25 * sigma))} ${unitLabel}`.trim(), volume: "داده حجم در دسترس نیست" },
     ],
     scenarios: { primary, alternative, invalidation },
     tradeSetup: {
-      entry: setup.entry,
-      stopLoss: setup.stopLoss,
-      takeProfit1: setup.takeProfit1,
-      takeProfit2: setup.takeProfit2,
+      entry: app(setup.entry),
+      stopLoss: app(setup.stopLoss),
+      takeProfit1: app(setup.takeProfit1),
+      takeProfit2: app(setup.takeProfit2),
       riskRewardRatio: setup.riskRewardRatio,
     },
     risks: riskScores(view, ctx),
@@ -762,6 +765,9 @@ export interface DailyForecastCore {
   coinBubblePct: number | null;
   levels: { sup1: number; sup2: number; res1: number; res2: number; invalidation: number };
   warnings: string[];
+  // Multiply an input-scale price by this to get Toman for text (1 when unknown).
+  textFactor: number;
+  textUnit: string;
 }
 
 const num = (v: unknown): number => {
@@ -938,11 +944,13 @@ export function forecastNextDay(rawInput: DailyForecastInput, ctx: EngineContext
     coinBubblePct,
     levels: { sup1, sup2, res1, res2, invalidation },
     warnings,
+    textFactor: closeToman ? closeToman / close : 1,
+    textUnit: closeToman ? "تومان" : "",
   };
 }
 
 function forecastScenarios(core: DailyForecastCore) {
-  const f = (n: number) => formatNumber(n);
+  const f = (n: number) => `${formatNumber(niceRound(n * core.textFactor))}${core.textUnit ? ` ${core.textUnit}` : ""}`;
   const { levels } = core;
   const direction = core.driftPct > 0.15 ? "up" : core.driftPct < -0.15 ? "down" : "flat";
   const primary =

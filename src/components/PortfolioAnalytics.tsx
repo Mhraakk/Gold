@@ -317,7 +317,7 @@ export default function PortfolioAnalytics({
                 {metrics.returnPct >= 0 ? "+" : ""}{metrics.returnPct}%
               </p>
               <p className="text-[9px] text-gray-500 data-value text-[11px]">
-                {metrics.totalGainVal >= 0 ? "+" : ""}{metrics.totalGainVal.toLocaleString()} تومان
+                {metrics.totalGainVal >= 0 ? "+" : ""}{metrics.totalGainVal.toLocaleString()} دلار
               </p>
             </div>
 

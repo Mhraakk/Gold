@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Bell, BellRing, Target, Activity, ShieldAlert, Plus, Trash2, Zap } from "lucide-react";
 import { AlertConfig, AssetId } from "../types";
 import { ASSETS_METADATA } from "../data";
+import { formatAssetPrice, isUsdAsset, priceUnitLabel, tomanToIrr } from "../utils/priceDisplay";
 
 export default function AlertEngine({ alerts, setAlerts }: { alerts: AlertConfig[], setAlerts: any }) {
   const [showForm, setShowForm] = useState(false);
@@ -57,7 +58,7 @@ export default function AlertEngine({ alerts, setAlerts }: { alerts: AlertConfig
                    </select>
                 </div>
                 <div>
-                   <label className="text-[10px] data-label text-gray-400 block mb-1">مقدار هدف / آستانه</label>
+                   <label className="text-[10px] data-label text-gray-400 block mb-1">مقدار هدف / آستانه ({priceUnitLabel((newAlert.assetId || "MELTED_GOLD") as AssetId)})</label>
                    <input 
                      type="number" 
                      value={newAlert.targetValue || ""} 
@@ -71,7 +72,11 @@ export default function AlertEngine({ alerts, setAlerts }: { alerts: AlertConfig
                <button onClick={() => setShowForm(false)} className="px-4 py-2 text-xs text-gray-400 hover:text-white transition">انصراف</button>
                <button 
                  onClick={() => {
-                   setAlerts([...alerts, { ...newAlert, id: Date.now().toString(), active: true, createdAt: Date.now().toString() }]);
+                   // The form takes Toman (or USD); alerts are stored in the price unit (IRR).
+                   const assetId = (newAlert.assetId || "MELTED_GOLD") as AssetId;
+                   const typed = newAlert.targetValue || 0;
+                   const targetValue = isUsdAsset(assetId) ? typed : tomanToIrr(typed);
+                   setAlerts([...alerts, { ...newAlert, assetId, targetValue, id: Date.now().toString(), active: true, createdAt: Date.now().toString() }]);
                    setShowForm(false);
                  }}
                  className="lux-button px-4 py-2 rounded-lg text-xs"
@@ -97,7 +102,7 @@ export default function AlertEngine({ alerts, setAlerts }: { alerts: AlertConfig
                        <h4 className="text-xs font-bold text-white">{ASSETS_METADATA[al.assetId as AssetId]?.persianName || al.assetId}</h4>
                        <p className="text-[9px] data-label text-gray-400 mt-1 uppercase">
                          {al.type === "PRICE_ABOVE" ? "صعود بالای" : al.type === "PRICE_BELOW" ? "نزول زیر" : al.type === "TREND_CHANGE" ? "تغییر روند" : "شوک نوسانی"}
-                         {al.targetValue ? ` : ${al.targetValue.toLocaleString()}` : ""}
+                         {(al.targetValue ?? al.value) ? ` : ${formatAssetPrice(al.assetId, (al.targetValue ?? al.value)!, { withUnit: true })}` : ""}
                        </p>
                      </div>
                    </div>

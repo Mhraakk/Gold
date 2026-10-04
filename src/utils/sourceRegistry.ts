@@ -156,7 +156,8 @@ export function parsePersianDigits(text: string): string {
   return out;
 }
 
-// High-fidelity live parser that queries the web, or fallback smoothly with realistic values if rate-limited or blocked
+// Live parser that queries the web. When a source cannot be fetched or parsed it
+// reports no data (never simulated prices), so stale numbers are not shown as live.
 export async function executeAndParseSource(sourceId: string, cheerioLoad: any, fetchFn: any): Promise<Source> {
   const source = registry.find(s => s.id === sourceId);
   if (!source) throw new Error(`Source ${sourceId} not found`);
@@ -196,13 +197,15 @@ export async function executeAndParseSource(sourceId: string, cheerioLoad: any, 
       }
     } catch (err: any) {
       // Log as standard info since this is fully supported fallback behavior
-      console.log(`[Source Registry] Source ${source.id} resolved via high-fidelity simulation mode.`);
+      console.log(`[Source Registry] Source ${source.id} could not be fetched: ${err.message}`);
       source.errorHistory.push(`${new Date().toISOString()}: real fetch error: ${err.message}`);
       if (source.errorHistory.length > 10) source.errorHistory.shift();
     }
 
-    source.health = isRealFetch ? "healthy" : "degraded";
-    source.dataQualityScore = isRealFetch ? 100 : 85;
+    source.health = isRealFetch ? "healthy" : "failing";
+    source.dataQualityScore = isRealFetch ? 100 : 0;
+    const unavailableText = "اتصال به منبع برقرار نشد؛ داده‌ای نمایش داده نمی‌شود.";
+    const noParserText = "پارسر این منبع هنوز پیاده‌سازی نشده است؛ داده‌ای نمایش داده نمی‌شود.";
 
     // Process parsing based on source
     let parsedAssets: MarketDatum[] = [];
@@ -226,10 +229,7 @@ export async function executeAndParseSource(sourceId: string, cheerioLoad: any, 
           }
         }
       } else {
-        // High fidelity simulation (for demo purpose, but in production this should be failure)
-        price = 1.0002 + (Math.random() - 0.5) * 0.0004;
-        rawText = `[شبیه‌ساز هوشمند] تتر جهانی مرجع: ${price.toFixed(4)} USD`;
-        isValid = true; // Simulation bypasses connection test for now
+        rawText = unavailableText;
       }
 
       if (isValid) {
@@ -255,11 +255,11 @@ export async function executeAndParseSource(sourceId: string, cheerioLoad: any, 
       }
 
       source.rawTextPreview = rawText;
-      source.rawData = html || `{"status": "simulated", "price": ${price}}`;
+      source.rawData = html || `{"status": "unavailable"}`;
     }
 
     else if (sourceId === "telegram_abshdh" || sourceId === "telegram_sabze_meydun") {
-      // SOURCE 2 & 3: Telegram Abshdh / Sabze Meydun (Melted Gold Mazaneh in IRR)
+      // SOURCE 2 & 3: Telegram Abshdh / Sabze Meydun (melted gold per mesghal, quoted in Toman)
       let meltedGoldIrr = 0;
       let rawText = "";
       let msgLink = "";
@@ -273,14 +273,14 @@ export async function executeAndParseSource(sourceId: string, cheerioLoad: any, 
         });
         
         for (let i = messages.length - 1; i >= 0; i--) {
-          const msg = parsePersianDigits(messages[i]);
+          const msg = parsePersianDigits(messages[i]).replace(/ـ/g, "");
           // Admission Gate: Identity test (label) and value test
           const match = msg.match(/(?:مظنه|آبشده|#ابشده).*?([\d,]{7,})/i);
           if (match) {
-            const num = parseFloat(match[1].replace(/,/g, ''));
-            // Admission Gate: Range check
-            if (!isNaN(num) && num > 30000000 && num < 200000000) {
-              meltedGoldIrr = num;
+            const tomanValue = parseFloat(match[1].replace(/,/g, ''));
+            // Admission Gate: Range check (Toman per mesghal)
+            if (!isNaN(tomanValue) && tomanValue > 20_000_000 && tomanValue < 2_000_000_000) {
+              meltedGoldIrr = tomanValue * 10;
               rawText = messages[i];
               const msgEl = $('.tgme_widget_message').eq(i);
               const link = msgEl.find('.tgme_widget_message_date').attr('href');
@@ -291,11 +291,7 @@ export async function executeAndParseSource(sourceId: string, cheerioLoad: any, 
           }
         }
       } else {
-        // High fidelity simulation
-        meltedGoldIrr = 79400000 + Math.floor((Math.random() - 0.5) * 400000);
-        rawText = `[شبیه‌ساز تلگرام] #مظنه_تهران آبشده نقدی فردایی: ${meltedGoldIrr.toLocaleString()} ریال`;
-        msgLink = source.url;
-        isValid = true;
+        rawText = unavailableText;
       }
 
       if (isValid) {
@@ -306,12 +302,12 @@ export async function executeAndParseSource(sourceId: string, cheerioLoad: any, 
           assetKey: "melted_gold",
           assetLabelFa: "مظنه آبشده (Telegram)",
           rawText,
-          rawNumericValue: meltedGoldIrr,
-          sourceNativeUnit: "IRR",
-          sourceNativeCurrency: "IRR",
+          rawNumericValue: meltedGoldIrr / 10,
+          sourceNativeUnit: "TOMAN",
+          sourceNativeCurrency: "TOMAN",
           canonicalIrrValue: meltedGoldIrr,
           displayTomanValue: meltedGoldIrr / 10,
-          marketNotation: `مظنه: ${(meltedGoldIrr / 1000000).toFixed(2)}`,
+          marketNotation: `مظنه: ${(meltedGoldIrr / 10 / 1000000).toFixed(2)}`,
           timestamp: now,
           fetchedAt: now,
           freshness: isRealFetch ? "live" : "delayed",
@@ -321,7 +317,7 @@ export async function executeAndParseSource(sourceId: string, cheerioLoad: any, 
       }
 
       source.rawTextPreview = rawText;
-      source.rawData = html || `{"status": "simulated", "meltedGoldIrr": ${meltedGoldIrr}}`;
+      source.rawData = html || `{"status": "unavailable"}`;
     }
 
     else if (sourceId === "arzdigital_tether") {
@@ -337,17 +333,14 @@ export async function executeAndParseSource(sourceId: string, cheerioLoad: any, 
           const cleanText = parsePersianDigits(tVal).replace(/,/g, '');
           const p = parseFloat(cleanText);
           // Admission Gate: Range check for Toman price of Tether
-          if (!isNaN(p) && p > 10000 && p < 1000000) {
+          if (!isNaN(p) && p > 10_000 && p < 5_000_000) {
             tomanPrice = p;
             rawText = `تارنما ارزدیجیتال قیمت تتر: ${tVal} تومان`;
             isValid = true;
           }
         }
       } else {
-        // High fidelity simulation
-        tomanPrice = 61500 + Math.floor((Math.random() - 0.5) * 400);
-        rawText = `[شبیه‌ساز ارزدیجیتال] قیمت زنده تتر: ${tomanPrice.toLocaleString()} تومان`;
-        isValid = true;
+        rawText = unavailableText;
       }
 
       if (isValid) {
@@ -374,218 +367,17 @@ export async function executeAndParseSource(sourceId: string, cheerioLoad: any, 
       }
 
       source.rawTextPreview = rawText;
-      source.rawData = html || `{"status": "simulated", "tomanPrice": ${tomanPrice}}`;
+      source.rawData = html || `{"status": "unavailable"}`;
     }
 
-    else if (sourceId === "parvazcoin") {
-      // SOURCE 5: Parvazcoin
-      let gold18kIrr = 4003000 * 10; // 4,003,000 Toman = 40,030,000 IRR
-      let emamiCoinIrr = 42500000 * 10; // 42,500,000 Toman = 425,000,000 IRR
-      let rawText = "پرواز کوین: طلای ۱۸ عیار ۴,۰۰۳,۰۰۰، سکه امامی ۴۲,۵۰۰,۰۰۰ تومان";
-
-      if (isRealFetch && html) {
-        const $ = cheerioLoad(html);
-        // Custom parser for parvazcoin if exists, otherwise fallback gracefully
-      } else {
-        gold18kIrr = (4000000 + Math.floor((Math.random() - 0.5) * 20000)) * 10;
-        emamiCoinIrr = (42400000 + Math.floor((Math.random() - 0.5) * 150000)) * 10;
-        rawText = `[شبیه‌ساز پرواز کوین] طلا ۱۸: ${(gold18kIrr/10).toLocaleString()} سکه: ${(emamiCoinIrr/10).toLocaleString()} تومان`;
-      }
-
-      parsedAssets.push({
-        sourceId,
-        sourceName: source.name,
-        sourceUrl: source.url,
-        assetKey: "gold_18k",
-        assetLabelFa: "طلای ۱۸ عیار (Parvazcoin)",
-        rawText,
-        rawNumericValue: gold18kIrr,
-        sourceNativeUnit: "TOMAN",
-        sourceNativeCurrency: "TOMAN",
-        canonicalIrrValue: gold18kIrr,
-        displayTomanValue: gold18kIrr / 10,
-        marketNotation: `${(gold18kIrr/10).toLocaleString()} تومان`,
-        timestamp: now,
-        fetchedAt: now,
-        freshness: isRealFetch ? "live" : "delayed",
-        validationStatus: "valid",
-        dataQualityScore: source.dataQualityScore
-      });
-
-      parsedAssets.push({
-        sourceId,
-        sourceName: source.name,
-        sourceUrl: source.url,
-        assetKey: "emami_coin",
-        assetLabelFa: "سکه امامی (Parvazcoin)",
-        rawText,
-        rawNumericValue: emamiCoinIrr,
-        sourceNativeUnit: "TOMAN",
-        sourceNativeCurrency: "TOMAN",
-        canonicalIrrValue: emamiCoinIrr,
-        displayTomanValue: emamiCoinIrr / 10,
-        marketNotation: `${(emamiCoinIrr/10).toLocaleString()} تومان`,
-        timestamp: now,
-        fetchedAt: now,
-        freshness: isRealFetch ? "live" : "delayed",
-        validationStatus: "valid",
-        dataQualityScore: source.dataQualityScore
-      });
-
-      source.rawTextPreview = rawText;
-      source.rawData = html || `{"status": "simulated"}`;
-    }
-
-    else if (sourceId === "isignal_gold_currency") {
-      // SOURCE 6: iSignal Gold and Currency
-      let gold18kIrr = 4005000 * 10; 
-      let dollarIrr = 61400 * 10;
-      let emamiCoinIrr = 42520000 * 10;
-      let rawText = "آیسیگنال: دلار آزاد ۶۱,۴۰۰، سکه ۴۲,۵۲۰,۰۰۰ تومان";
-
-      if (isRealFetch && html) {
-        const $ = cheerioLoad(html);
-        // Custom cheerio parsing
-      } else {
-        gold18kIrr = (4002000 + Math.floor((Math.random() - 0.5) * 22000)) * 10;
-        dollarIrr = (61350 + Math.floor((Math.random() - 0.5) * 300)) * 10;
-        emamiCoinIrr = (42450000 + Math.floor((Math.random() - 0.5) * 160000)) * 10;
-        rawText = `[شبیه‌ساز آیسیگنال] دلار: ${(dollarIrr/10).toLocaleString()} طلا: ${(gold18kIrr/10).toLocaleString()}`;
-      }
-
-      parsedAssets.push({
-        sourceId,
-        sourceName: source.name,
-        sourceUrl: source.url,
-        assetKey: "gold_18k",
-        assetLabelFa: "طلای ۱۸ عیار (iSignal)",
-        rawText,
-        rawNumericValue: gold18kIrr,
-        sourceNativeUnit: "TOMAN",
-        sourceNativeCurrency: "TOMAN",
-        canonicalIrrValue: gold18kIrr,
-        displayTomanValue: gold18kIrr / 10,
-        marketNotation: `${(gold18kIrr/10).toLocaleString()} تومان`,
-        timestamp: now,
-        fetchedAt: now,
-        freshness: isRealFetch ? "live" : "delayed",
-        validationStatus: "valid",
-        dataQualityScore: source.dataQualityScore
-      });
-
-      parsedAssets.push({
-        sourceId,
-        sourceName: source.name,
-        sourceUrl: source.url,
-        assetKey: "dollar_azad",
-        assetLabelFa: "دلار آزاد (iSignal)",
-        rawText,
-        rawNumericValue: dollarIrr,
-        sourceNativeUnit: "TOMAN",
-        sourceNativeCurrency: "TOMAN",
-        canonicalIrrValue: dollarIrr,
-        displayTomanValue: dollarIrr / 10,
-        marketNotation: `${(dollarIrr/10).toLocaleString()} تومان`,
-        timestamp: now,
-        fetchedAt: now,
-        freshness: isRealFetch ? "live" : "delayed",
-        validationStatus: "valid",
-        dataQualityScore: source.dataQualityScore
-      });
-
-      parsedAssets.push({
-        sourceId,
-        sourceName: source.name,
-        sourceUrl: source.url,
-        assetKey: "emami_coin",
-        assetLabelFa: "سکه امامی (iSignal)",
-        rawText,
-        rawNumericValue: emamiCoinIrr,
-        sourceNativeUnit: "TOMAN",
-        sourceNativeCurrency: "TOMAN",
-        canonicalIrrValue: emamiCoinIrr,
-        displayTomanValue: emamiCoinIrr / 10,
-        marketNotation: `${(emamiCoinIrr/10).toLocaleString()} تومان`,
-        timestamp: now,
-        fetchedAt: now,
-        freshness: isRealFetch ? "live" : "delayed",
-        validationStatus: "valid",
-        dataQualityScore: source.dataQualityScore
-      });
-
-      source.rawTextPreview = rawText;
-      source.rawData = html || `{"status": "simulated"}`;
-    }
-
-    else if (sourceId === "moj3") {
-      // SOURCE 5: Moj3 Broad Market Board
-      // Simplified parsing for brevity, should follow the admission gate
-      let assets: { key: string; label: string; value: number; unit: "TOMAN" | "USD"; cur: "TOMAN" | "USD" }[] = [];
-      let rawText = "موج سوم — به‌روزرسانی موفق";
-      let isValid = false;
-
-      if (isRealFetch && html) {
-        const $ = cheerioLoad(html);
-        // ... (Parsing logic with validation)
-        // For demonstration, simulating success after connection test
-        isValid = true;
-      } else {
-        // Simulation
-        isValid = true;
-      }
-
-      if (isValid) {
-        // Add assets with explicit label, unit, and value tests
-        parsedAssets.push({
-          sourceId,
-          sourceName: source.name,
-          sourceUrl: source.url,
-          assetKey: "gold_18k",
-          assetLabelFa: "طلای ۱۸ عیار",
-          rawText,
-          rawNumericValue: 40000000, // IRR
-          sourceNativeUnit: "TOMAN",
-          sourceNativeCurrency: "TOMAN",
-          canonicalIrrValue: 40000000,
-          displayTomanValue: 4000000,
-          marketNotation: "4,000,000 تومان",
-          timestamp: now,
-          fetchedAt: now,
-          freshness: "live",
-          validationStatus: "valid",
-          dataQualityScore: 100
-        });
-      }
-
-      source.rawTextPreview = rawText;
-      source.rawData = html || `{"status": "simulated"}`;
-    }
-
-    // Custom Sources Added dynamically by Owner
     else {
-      // Create simple parsing or simulated response based on type
-      const simulatedPrice = 1000 + Math.floor(Math.random() * 50);
-      parsedAssets.push({
-        sourceId,
-        sourceName: source.name,
-        sourceUrl: source.url,
-        assetKey: "custom_asset",
-        assetLabelFa: "دارایی سفارشی",
-        rawText: `Custom feed raw output: ${simulatedPrice}`,
-        rawNumericValue: simulatedPrice,
-        sourceNativeUnit: "TOMAN",
-        sourceNativeCurrency: "TOMAN",
-        canonicalIrrValue: simulatedPrice * 10,
-        displayTomanValue: simulatedPrice,
-        marketNotation: `${simulatedPrice} تومان`,
-        timestamp: now,
-        fetchedAt: now,
-        freshness: "live",
-        validationStatus: "valid",
-        dataQualityScore: 100
-      });
-      source.rawTextPreview = `Custom source parsed successfully. Value: ${simulatedPrice}`;
-      source.rawData = `{"price": ${simulatedPrice}}`;
+      // parvazcoin, iSignal, moj3 and owner-added custom sources have no parser
+      // yet. They used to emit fixed or random demo prices marked as live;
+      // now they report that no data is available instead.
+      if (isRealFetch) source.health = "degraded";
+      source.dataQualityScore = 0;
+      source.rawTextPreview = isRealFetch ? noParserText : unavailableText;
+      source.rawData = html ? html.slice(0, 2000) : `{"status": "unavailable"}`;
     }
 
     // Save history
@@ -694,7 +486,7 @@ export function getCrossSourceValidation(): ValidationComparison[] {
 
   // Comparison 1: abshdh vs Tahran Sabza (Melted Gold)
   const absh = registry.find(s => s.id === "telegram_abshdh")?.parsedAssets.find(a => a.assetKey === "melted_gold");
-  const sabza = registry.find(s => s.id === "telegram_tahran_sabza")?.parsedAssets.find(a => a.assetKey === "melted_gold");
+  const sabza = registry.find(s => s.id === "telegram_sabze_meydun")?.parsedAssets.find(a => a.assetKey === "melted_gold");
 
   if (absh && sabza) {
     const valA = absh.canonicalIrrValue;
@@ -780,11 +572,10 @@ export function getCrossSourceValidation(): ValidationComparison[] {
   const moj3_ons = registry.find(s => s.id === "moj3")?.parsedAssets.find(a => a.assetKey === "xauusd");
   const tgju_ons = registry.find(s => s.id === "tgju_tether")?.parsedAssets.find(a => a.assetKey === "tether_global"); // Global USD or ons
 
-  if (moj3_ons && tgju_ons) {
+  // Only compare when the TGJU reference is an actual ounce price (never a default).
+  if (moj3_ons && tgju_ons && tgju_ons.rawNumericValue > 100) {
     const valA = moj3_ons.rawNumericValue; // global ounce
-    const valB = tgju_ons.rawNumericValue; // let's compare with simulated ons if available or default 2348.5
-    // since tgju_tether provides global tether usd which is always ~1.0, let's look for tgju ons in the cache or default
-    const actualonsValB = valB > 100 ? valB : 2348.5; 
+    const actualonsValB = tgju_ons.rawNumericValue;
     const absDiff = Math.abs(valA - actualonsValB);
     const pctDiff = (absDiff / Math.max(valA, actualonsValB)) * 100;
 

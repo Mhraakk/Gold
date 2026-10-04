@@ -27,6 +27,7 @@ import {
   ASSETS_METADATA,
   MACRO_CALENDAR,
   MARKET_NEWS,
+  getPrice,
 } from "./data";
 import {
   analyzeTechnicalIndicators,
@@ -34,6 +35,7 @@ import {
   TechnicalSignals,
 } from "./services/aiEngine";
 import { validateAndNormalizePrice, NormalizedMarketData } from "./utils/dataValidation";
+import { connectorPriceUnit, formatAssetAmount, formatAssetPrice, fromDisplayUnit, priceUnitLabel, toDisplayUnit } from "./utils/priceDisplay";
 import { checkDataQuality, DataQualityResult } from "./utils/dataQualityEngine";
 import { encryptData, decryptData } from "./utils/crypto";
 import ChartTerminal from "./components/ChartTerminal";
@@ -164,6 +166,13 @@ const DEFAULT_MARKET_STRUCTURE: MarketStructure = {
   resistanceLines: [],
 };
 
+// Starting prices: the last cached live price (IRR for Iranian assets), or 0
+// ("در حال دریافت…") until live data arrives. No hardcoded Iranian prices.
+const initialPrices = (): Record<AssetId, number> =>
+  Object.fromEntries(
+    (Object.keys(ASSETS_METADATA) as AssetId[]).map((id) => [id, getPrice(id)]),
+  ) as Record<AssetId, number>;
+
 // Renders **bold** spans inside one line of the analysis markdown.
 function renderInlineBold(text: string) {
   return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
@@ -213,43 +222,13 @@ export default function App() {
   ];
 
   // Dynamic Live Asset Price state
-  const [prices, setPrices] = useState<Record<AssetId, number>>({
-    MELTED_GOLD: 18450000,
-    GOLD_18K: 4003000,
-    GOLD_24K: 5337000,
-    MESGHAL: 7500000,
-    COIN_EMAMI: 42500000,
-    COIN_HALF: 23800000,
-    COIN_QUARTER: 15400000,
-    GOLD_GRAM: 4800000,
-    USDIRT: 61450,
-    USDTIRT: 61850,
-    XAUUSD: 2348.5,
-    GOLD_FUTURES: 2362.1,
-    GOLD_CFD: 2349.0,
-    GOLD_ETF: 216.8,
-  });
+  const [prices, setPrices] = useState<Record<AssetId, number>>(initialPrices);
 
   const [dataQuality, setDataQuality] = useState<Record<string, DataQualityResult>>({});
   const [sourceTimestamps, setSourceTimestamps] = useState<Record<string, number>>({});
 
   const [assets, setAssets] = useState<AssetInfo[]>(() =>
-    generateLiveAssets({
-      MELTED_GOLD: 18450000,
-      GOLD_18K: 4003000,
-      GOLD_24K: 5337000,
-      MESGHAL: 7500000,
-      COIN_EMAMI: 42500000,
-      COIN_HALF: 23800000,
-      COIN_QUARTER: 15400000,
-      GOLD_GRAM: 4800000,
-      USDIRT: 61450,
-      USDTIRT: 61850,
-      XAUUSD: 2348.5,
-      GOLD_FUTURES: 2362.1,
-      GOLD_CFD: 2349.0,
-      GOLD_ETF: 216.8,
-    }),
+    generateLiveAssets(initialPrices()),
   );
   const [historicalData, setHistoricalData] = useState<
     Record<AssetId, Candle[]>
@@ -393,24 +372,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
   >({});
 
   // Alerts configuration state
-  const [alerts, setAlerts] = useState<AlertConfig[]>([
-    {
-      id: "al_1",
-      assetId: "MELTED_GOLD",
-      condition: "above",
-      value: 18700000,
-      channel: "telegram",
-      enabled: true,
-    },
-    {
-      id: "al_2",
-      assetId: "XAUUSD",
-      condition: "below",
-      value: 2320.0,
-      channel: "email",
-      enabled: false,
-    },
-  ]);
+  const [alerts, setAlerts] = useState<AlertConfig[]>([]);
   const [injectTelegramPrice, setInjectTelegramPrice] = useState<boolean>(true);
 
   // Custom API pricing connectors state (Persisted in LocalStorage)
@@ -420,6 +382,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
     return [
       {
         id: "conn_1",
+        priceUnit: "TOMAN",
         name: "Abshده Live Provider (@abshdh)",
         providerType: "TelegramScraper",
         endpoint: "/api/market/abshdh",
@@ -435,6 +398,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
       },
       {
         id: "conn_2",
+        priceUnit: "IRR",
         name: "Nobitex USDT/Toman Orderbook API",
         providerType: "JSON",
         endpoint: "https://api.nobitex.ir/v2/orderbook/USDTIRT",
@@ -450,6 +414,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
       },
       {
         id: "conn_3",
+        priceUnit: "TOMAN",
         name: "Bonbast Free Market FX Scraper",
         providerType: "WebScraping",
         endpoint: "https://www.bonbast.com/api/v2/rates",
@@ -480,6 +445,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
       },
       {
         id: "conn_5",
+        priceUnit: "IRR",
         name: "TGJU Free Dollar",
         providerType: "REST",
         endpoint: "/api/market/tgju/latest?asset=dollar_azad",
@@ -495,6 +461,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
       },
       {
         id: "conn_6",
+        priceUnit: "IRR",
         name: "TGJU Emami Coin",
         providerType: "REST",
         endpoint: "/api/market/tgju/latest?asset=emami",
@@ -692,6 +659,23 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
     return () => window.removeEventListener("storage", handleStorageChange);
   }, []);
 
+  // Candles start from the last cached price; an asset with no cached price
+  // starts at 0, so anchor its candles to the first live price that arrives.
+  useEffect(() => {
+    setHistoricalData((prev) => {
+      let next = prev;
+      for (const id of Object.keys(prices) as AssetId[]) {
+        const candles = prev[id];
+        const lastClose = candles?.[candles.length - 1]?.close ?? 0;
+        if (prices[id] > 0 && candles?.length && lastClose <= 0) {
+          if (next === prev) next = { ...prev };
+          next[id] = generateHistoricalCandles(id, candles.length, prices[id]);
+        }
+      }
+      return next;
+    });
+  }, [prices]);
+
   // --- INITIALIZATION ---
   useEffect(() => {
     // Generate base datasets
@@ -854,7 +838,16 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
             const mGold = data.MELTED_GOLD;
             const g18k = data.GOLD_18K;
 
-            if (mGold && typeof mGold === "number" && !isNaN(mGold)) {
+            const unit = connectorPriceUnit(conn);
+            const meltedCheck = mGold && typeof mGold === "number" && !isNaN(mGold)
+              ? validateAndNormalizePrice("MELTED_GOLD", mGold, unit, "Connector")
+              : null;
+            if (meltedCheck && meltedCheck.validationStatus !== "valid") {
+              setConnectorErrors((prev) => ({
+                ...prev,
+                MELTED_GOLD: `مقدار ${mGold.toLocaleString()} با واحد ${unit} معتبر نیست؛ واحد اتصال‌دهنده را بررسی کنید.`,
+              }));
+            } else if (meltedCheck) {
               connectorBackoff.current[conn.id] = {
                 attempts: 0,
                 nextFetchTime: 0,
@@ -865,12 +858,15 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                 GOLD_18K: "",
               }));
               
-              const normalizedMelted = validateAndNormalizePrice("MELTED_GOLD", mGold, "IRR", "Connector").canonicalValue;
+              const normalizedMelted = meltedCheck.canonicalValue;
+              const gramCheck = g18k && typeof g18k === "number" && !isNaN(g18k)
+                ? validateAndNormalizePrice("GOLD_18K", g18k, unit, "Connector")
+                : null;
 
               setPrices((prev) => {
                 const finalGramPrice =
-                  g18k && typeof g18k === "number" && !isNaN(g18k)
-                    ? validateAndNormalizePrice("GOLD_18K", g18k, "IRR", "Connector").canonicalValue
+                  gramCheck && gramCheck.validationStatus === "valid"
+                    ? gramCheck.canonicalValue
                     : Math.floor(normalizedMelted / 4.3318);
                 const updated = {
                   ...prev,
@@ -878,11 +874,11 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                   GOLD_18K: finalGramPrice,
                 };
                 localStorage.setItem(
-                  `gold_terminal_last_price_MELTED_GOLD`,
+                  `gold_terminal_last_price_v2_MELTED_GOLD`,
                   normalizedMelted.toString(),
                 );
                 localStorage.setItem(
-                  `gold_terminal_last_price_GOLD_18K`,
+                  `gold_terminal_last_price_v2_GOLD_18K`,
                   finalGramPrice.toString(),
                 );
                 return updated;
@@ -897,8 +893,16 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
               }
             }
 
-            if (typeof price === "number" && !isNaN(price)) {
-              const normalizedPrice = validateAndNormalizePrice(conn.targetAssetId, price, "IRR", "Connector").canonicalValue;
+            const checked = typeof price === "number" && !isNaN(price)
+              ? validateAndNormalizePrice(conn.targetAssetId, price, connectorPriceUnit(conn), "Connector")
+              : null;
+            if (checked && checked.validationStatus !== "valid") {
+              setConnectorErrors((prev) => ({
+                ...prev,
+                [conn.targetAssetId]: `مقدار ${price.toLocaleString()} با واحد ${connectorPriceUnit(conn)} معتبر نیست؛ واحد اتصال‌دهنده را بررسی کنید.`,
+              }));
+            } else if (checked) {
+              const normalizedPrice = checked.canonicalValue;
               
               // Success: reset backoff tracker
               connectorBackoff.current[conn.id] = {
@@ -914,7 +918,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                 const updated = { ...prev, [conn.targetAssetId]: normalizedPrice };
                 // Cache it to local storage to prevent starting at 0
                 localStorage.setItem(
-                  `gold_terminal_last_price_${conn.targetAssetId}`,
+                  `gold_terminal_last_price_v2_${conn.targetAssetId}`,
                   normalizedPrice.toString(),
                 );
                 return updated;
@@ -972,7 +976,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                   const hasCustomMelted = connectors.find(c => c.isActive && c.targetAssetId === 'MELTED_GOLD');
                   if (!hasCustomMelted && data.MELTED_GOLD) {
                      try {
-                        const normalized = validateAndNormalizePrice('MELTED_GOLD', data.MELTED_GOLD, 'IRR', 'Telegram @abshdh');
+                        const normalized = validateAndNormalizePrice('MELTED_GOLD', data.MELTED_GOLD, 'TOMAN', 'Telegram @abshdh');
                         if (normalized && normalized.validationStatus === 'valid') {
                            setSourceTimestamps(ts => ({...ts, ['MELTED_GOLD']: abshdhJson.timestamp || Date.now()}));
                            next['MELTED_GOLD'] = normalized.canonicalValue;
@@ -985,7 +989,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                   const hasCustom18k = connectors.find(c => c.isActive && c.targetAssetId === 'GOLD_18K');
                   if (!hasCustom18k && data.GOLD_18K) {
                      try {
-                        const normalized = validateAndNormalizePrice('GOLD_18K', data.GOLD_18K, 'IRR', 'Telegram @abshdh');
+                        const normalized = validateAndNormalizePrice('GOLD_18K', data.GOLD_18K, 'TOMAN', 'Telegram @abshdh');
                         if (normalized && normalized.validationStatus === 'valid') {
                            setSourceTimestamps(ts => ({...ts, ['GOLD_18K']: abshdhJson.timestamp || Date.now()}));
                            next['GOLD_18K'] = normalized.canonicalValue;
@@ -1081,45 +1085,44 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
     return () => clearInterval(interval);
   }, []);
 
-  // Monitor prices for alerts
+  // Monitor prices for alerts. Thresholds are stored like prices (IRR for
+  // Iranian assets, USD otherwise). Alerts from the Alert Engine use
+  // type/targetValue/active; older ones use condition/value/enabled.
   useEffect(() => {
     alerts.forEach((alert) => {
-      if (!alert.enabled) return;
+      const enabled = alert.enabled ?? alert.active;
+      const condition =
+        alert.condition ??
+        (alert.type === "PRICE_ABOVE" ? "above" : alert.type === "PRICE_BELOW" ? "below" : undefined);
+      const threshold = alert.value ?? alert.targetValue;
+      if (!enabled || !condition || !threshold) return;
 
       const currentPrice = prices[alert.assetId];
       if (!currentPrice) return;
 
-      let triggered = false;
-      if (alert.condition === "above" && currentPrice >= alert.value) {
-        triggered = true;
-      } else if (alert.condition === "below" && currentPrice <= alert.value) {
-        triggered = true;
+      const triggered = condition === "above" ? currentPrice >= threshold : currentPrice <= threshold;
+      if (!triggered) return;
+
+      const meta = ASSETS_METADATA[alert.assetId];
+      const assetName = meta ? meta.persianName : alert.assetId;
+      const conditionText = condition === "above" ? "بالاتر از" : "پایین‌تر از";
+
+      // Trigger browser notification
+      if (
+        (alert.channel ?? "browser") === "browser" &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        new Notification("هشدار سیستم هوشمند معاملاتی", {
+          body: `قیمت ${assetName} ${conditionText} ${formatAssetPrice(alert.assetId, threshold, { withUnit: true })} قرار گرفت. قیمت فعلی: ${formatAssetPrice(alert.assetId, currentPrice, { withUnit: true })}`,
+          icon: "/favicon.ico",
+        });
       }
 
-      if (triggered) {
-        // Find asset info
-        const meta = ASSETS_METADATA[alert.assetId];
-        const assetName = meta ? meta.persianName : alert.assetId;
-        const conditionText =
-          alert.condition === "above" ? "بالاتر از" : "پایین‌تر از";
-
-        // Trigger browser notification
-        if (
-          alert.channel === "browser" &&
-          "Notification" in window &&
-          Notification.permission === "granted"
-        ) {
-          new Notification("هشدار سیستم هوشمند معاملاتی", {
-            body: `قیمت ${assetName} ${conditionText} ${alert.value.toLocaleString()} قرار گرفت. قیمت فعلی: ${currentPrice.toLocaleString()}`,
-            icon: "/favicon.ico",
-          });
-        }
-
-        // Disable the alert after it's triggered
-        setAlerts((prev) =>
-          prev.map((a) => (a.id === alert.id ? { ...a, enabled: false } : a)),
-        );
-      }
+      // Disable the alert after it's triggered
+      setAlerts((prev) =>
+        prev.map((a) => (a.id === alert.id ? { ...a, enabled: false, active: false } : a)),
+      );
     });
   }, [prices, alerts]); // Re-run whenever prices or alerts change
 
@@ -1256,10 +1259,11 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
   // Journal entry trigger
   const handleAddJournal = (e: React.FormEvent) => {
     e.preventDefault();
-    const entryPriceNum =
-      parseFloat(newJournalEntry.entryPrice) || prices[activeAssetId];
-    const exitPriceNum =
-      parseFloat(newJournalEntry.exitPrice) || prices[activeAssetId] * 1.01;
+    // Typed prices are in Toman (USD for global assets); store them like prices.
+    const typedEntry = parseFloat(newJournalEntry.entryPrice);
+    const typedExit = parseFloat(newJournalEntry.exitPrice);
+    const entryPriceNum = typedEntry ? fromDisplayUnit(activeAssetId, typedEntry) : prices[activeAssetId];
+    const exitPriceNum = typedExit ? fromDisplayUnit(activeAssetId, typedExit) : prices[activeAssetId] * 1.01;
     const quantityNum = parseFloat(newJournalEntry.quantity) || 1;
 
     // Simple PNL math
@@ -1392,10 +1396,10 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                       <p
                         className={`text-xs data-value text-[11px] font-medium transition-colors duration-300 ${activeAssetId === as.id ? (as.change >= 0 ? "text-[var(--accent-emerald)]" : "text-[var(--accent-crimson)]") : ""}`}
                       >
-                        {as.currentPrice.toLocaleString(undefined, {
-                          maximumFractionDigits:
-                            ASSETS_METADATA[as.id].decimals,
-                        })}
+                        {formatAssetPrice(as.id, as.currentPrice)}
+                        {as.currentPrice > 0 && (
+                          <span className="text-[9px] opacity-60 mr-1 font-sans">{priceUnitLabel(as.id)}</span>
+                        )}
                       </p>
                       <p
                         className={`text-[10px] data-value text-[11px] mt-0.5 text-right ${as.change >= 0 ? "text-[var(--accent-emerald)]" : "text-[var(--accent-crimson)]"}`}
@@ -1877,7 +1881,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                 <div className="flex items-center justify-between w-full">
                                   <span className="text-xs text-[var(--text-secondary)] font-sans">دامنه نوسان روز:</span>
                                   <span className="text-xs font-mono font-semibold text-gray-300">
-                                    {as.low24h.toLocaleString()} - {as.high24h.toLocaleString()}
+                                    {formatAssetPrice(meta.id, as.low24h)} - {formatAssetPrice(meta.id, as.high24h, { withUnit: true })}
                                   </span>
                                 </div>
                               </div>
@@ -1911,7 +1915,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                   dataQuality[meta.id].status === "نیازمند بررسی" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
                                   dataQuality[meta.id].status === "تایید نشده" ? "bg-red-500/10 text-red-400 border border-red-500/20" :
                                   "bg-blue-500/10 text-blue-400 border border-blue-500/20"
-                                }`} title={dataQuality[meta.id].referencePrice ? `قیمت مرجع: ${dataQuality[meta.id].referencePrice?.toLocaleString()}` : 'در حال بررسی...'}>
+                                }`} title={dataQuality[meta.id].referencePrice ? `قیمت مرجع: ${formatAssetPrice(meta.id, dataQuality[meta.id].referencePrice!, { withUnit: true })}` : 'در حال بررسی...'}>
                                   {dataQuality[meta.id].status}
                                 </span>
                               )}
@@ -1962,14 +1966,12 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                   $ {(prices[meta.id] || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                 </div>
                                 <div className="text-[10px] text-gray-400 font-sans">
-                                  دلاف به ازای اونس تروا
+                                  دلار به ازای اونس تروا
                                 </div>
                               </div>
                             ) : (
                               <div className="text-lg font-mono font-extrabold text-white tracking-wide text-left w-full font-tabular">
-                                {(prices[meta.id] || 0).toLocaleString(undefined, {
-                                  maximumFractionDigits: meta.decimals,
-                                })} {meta.unit}
+                                {formatAssetPrice(meta.id, prices[meta.id] || 0)} {meta.unit}
                               </div>
                             )}
 
@@ -2059,9 +2061,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                         شاخص نوسان (ATR)
                       </span>
                       <span className="text-sm data-value text-[11px] font-bold text-gray-300 mt-1 text-left">
-                        {technicalSignals?.atr.toLocaleString(undefined, {
-                          maximumFractionDigits: 1,
-                        })}
+                        {technicalSignals ? `${formatAssetAmount(activeAssetId, technicalSignals.atr)} ${priceUnitLabel(activeAssetId)}` : "—"}
                       </span>
                     </div>
 
@@ -2281,7 +2281,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                   قیمت ورود پیشنهادی:
                                 </span>
                                 <span className="data-value text-[11px] font-bold text-white">
-                                  {aiAnalysis.tradeSetup.entry.toLocaleString()}
+                                  {formatAssetPrice(aiAnalysis.assetId, aiAnalysis.tradeSetup.entry, { withUnit: true })}
                                 </span>
                               </div>
                               <div className="flex flex-row justify-between text-xs font-sans">
@@ -2289,7 +2289,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                   حد ضرر (SL):
                                 </span>
                                 <span className="data-value text-[11px] font-bold text-[var(--accent-crimson)]">
-                                  {aiAnalysis.tradeSetup.stopLoss.toLocaleString()}
+                                  {formatAssetPrice(aiAnalysis.assetId, aiAnalysis.tradeSetup.stopLoss, { withUnit: true })}
                                 </span>
                               </div>
                               <div className="flex flex-row justify-between text-xs font-sans">
@@ -2297,7 +2297,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                   حد سود اول (TP1):
                                 </span>
                                 <span className="data-value text-[11px] font-bold text-[var(--accent-emerald)]">
-                                  {aiAnalysis.tradeSetup.takeProfit1.toLocaleString()}
+                                  {formatAssetPrice(aiAnalysis.assetId, aiAnalysis.tradeSetup.takeProfit1, { withUnit: true })}
                                 </span>
                               </div>
                               <div className="flex flex-row justify-between text-xs font-sans">
@@ -2305,7 +2305,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                   حد سود دوم (TP2):
                                 </span>
                                 <span className="data-value text-[11px] font-bold text-[var(--accent-emerald)]">
-                                  {aiAnalysis.tradeSetup.takeProfit2.toLocaleString()}
+                                  {formatAssetPrice(aiAnalysis.assetId, aiAnalysis.tradeSetup.takeProfit2, { withUnit: true })}
                                 </span>
                               </div>
                               <div className="border-t border-white/5 pt-2.5 flex flex-row justify-between text-xs font-sans">
@@ -2646,16 +2646,16 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
 
                         <div className="space-y-1 text-right">
                           <label className="text-gray-400 font-sans">
-                            قیمت ورود پیشنهادی:
+                            قیمت ورود پیشنهادی ({priceUnitLabel(activeAssetId)}):
                           </label>
                           <input
                             type="number"
                             step="any"
-                            value={positionInput.entryPrice}
+                            value={toDisplayUnit(activeAssetId, positionInput.entryPrice)}
                             onChange={(e) =>
                               setPositionInput((prev) => ({
                                 ...prev,
-                                entryPrice: parseFloat(e.target.value) || 0,
+                                entryPrice: fromDisplayUnit(activeAssetId, parseFloat(e.target.value) || 0),
                               }))
                             }
                             className="w-full bg-black/40 border border-white/5 rounded p-2 text-white data-value text-[11px] text-left"
@@ -2686,16 +2686,16 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                         <div className="grid grid-cols-2 gap-2 text-right">
                           <div className="space-y-1">
                             <label className="text-[var(--accent-crimson)] font-sans">
-                              حد ضرر (SL):
+                              حد ضرر (SL) ({priceUnitLabel(activeAssetId)}):
                             </label>
                             <input
                               type="number"
                               step="any"
-                              value={positionInput.stopLoss}
+                              value={toDisplayUnit(activeAssetId, positionInput.stopLoss)}
                               onChange={(e) =>
                                 setPositionInput((prev) => ({
                                   ...prev,
-                                  stopLoss: parseFloat(e.target.value) || 0,
+                                  stopLoss: fromDisplayUnit(activeAssetId, parseFloat(e.target.value) || 0),
                                 }))
                               }
                               className="w-full bg-black/40 border border-white/5 rounded p-2 text-rose-300 data-value text-[11px] text-left"
@@ -2703,16 +2703,16 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                           </div>
                           <div className="space-y-1">
                             <label className="text-[var(--accent-emerald)] font-sans">
-                              حد سود (TP):
+                              حد سود (TP) ({priceUnitLabel(activeAssetId)}):
                             </label>
                             <input
                               type="number"
                               step="any"
-                              value={positionInput.takeProfit}
+                              value={toDisplayUnit(activeAssetId, positionInput.takeProfit)}
                               onChange={(e) =>
                                 setPositionInput((prev) => ({
                                   ...prev,
-                                  takeProfit: parseFloat(e.target.value) || 0,
+                                  takeProfit: fromDisplayUnit(activeAssetId, parseFloat(e.target.value) || 0),
                                 }))
                               }
                               className="w-full bg-black/40 border border-white/5 rounded p-2 text-emerald-300 data-value text-[11px] text-left"
@@ -2845,22 +2845,22 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                       {p.quantity}
                                     </td>
                                     <td className="data-value text-[11px] text-gray-300 text-right">
-                                      {p.entryPrice.toLocaleString()}
+                                      {formatAssetPrice(p.assetId, p.entryPrice)}
                                     </td>
                                     <td className="data-value text-[11px] text-white font-semibold text-right">
-                                      {currentPrice.toLocaleString()}
+                                      {formatAssetPrice(p.assetId, currentPrice)}
                                     </td>
                                     <td className="data-value text-[11px] text-[10px] text-gray-400 text-right">
                                       <p>
                                         SL:{" "}
                                         <span className="text-[var(--accent-crimson)]">
-                                          {p.stopLoss.toLocaleString()}
+                                          {formatAssetPrice(p.assetId, p.stopLoss)}
                                         </span>
                                       </p>
                                       <p>
                                         TP:{" "}
                                         <span className="text-[var(--accent-emerald)]">
-                                          {p.takeProfit.toLocaleString()}
+                                          {formatAssetPrice(p.assetId, p.takeProfit)}
                                         </span>
                                       </p>
                                     </td>
@@ -3292,12 +3292,12 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                   >
                     <div className="space-y-1">
                       <label className="text-gray-400 font-sans">
-                        قیمت ورود:
+                        قیمت ورود ({priceUnitLabel(activeAssetId)}):
                       </label>
                       <input
                         type="number"
                         step="any"
-                        placeholder={prices[activeAssetId].toString()}
+                        placeholder={String(Math.round(toDisplayUnit(activeAssetId, prices[activeAssetId])))}
                         value={newJournalEntry.entryPrice}
                         onChange={(e) =>
                           setNewJournalEntry((prev) => ({
@@ -3310,12 +3310,12 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                     </div>
                     <div className="space-y-1">
                       <label className="text-gray-400 font-sans">
-                        قیمت خروج محقق شده:
+                        قیمت خروج محقق شده ({priceUnitLabel(activeAssetId)}):
                       </label>
                       <input
                         type="number"
                         step="any"
-                        placeholder={(prices[activeAssetId] * 1.01).toString()}
+                        placeholder={String(Math.round(toDisplayUnit(activeAssetId, prices[activeAssetId] * 1.01)))}
                         value={newJournalEntry.exitPrice}
                         onChange={(e) =>
                           setNewJournalEntry((prev) => ({
@@ -3444,8 +3444,8 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                   ورود/خروج:
                                 </p>
                                 <p className="text-gray-200 data-value text-[11px] direction-ltr">
-                                  {j.entryPrice.toLocaleString()} &rarr;{" "}
-                                  {j.exitPrice.toLocaleString()}
+                                  {formatAssetPrice(j.assetId, j.entryPrice)} &rarr;{" "}
+                                  {formatAssetPrice(j.assetId, j.exitPrice)}
                                 </p>
                               </div>
                               <div>
@@ -3456,8 +3456,8 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                   className={`data-value text-[11px] font-bold direction-ltr ${j.pnl >= 0 ? "text-[var(--accent-emerald)]" : "text-[var(--accent-crimson)]"}`}
                                 >
                                   {j.pnl >= 0 ? "+" : ""}
-                                  {j.pnl.toLocaleString()}{" "}
-                                  {meta.unit.includes("تومان") ? "تومان" : "$"}
+                                  {formatAssetAmount(j.assetId, j.pnl)}{" "}
+                                  {priceUnitLabel(j.assetId)}
                                 </p>
                               </div>
                             </div>

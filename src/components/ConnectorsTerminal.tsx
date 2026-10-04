@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { tgjuAssets } from '../config/tgju-assets';
 import { AssetId, APIConnector } from '../types';
+import { connectorPriceUnit } from '../utils/priceDisplay';
 import { 
   Settings, 
   RefreshCw, 
@@ -79,7 +80,8 @@ const ConnectorsTerminal = function ConnectorsTerminal({ connectors, setConnecto
     mappingVolume: 'volume',
     isActive: true,
     targetAssetId: 'MELTED_GOLD',
-    priority: 'High'
+    priority: 'High',
+    priceUnit: 'IRR'
   });
 
   // Sandbox Tester states
@@ -280,7 +282,8 @@ const ConnectorsTerminal = function ConnectorsTerminal({ connectors, setConnecto
       mappingVolume: 'volume',
       isActive: true,
       targetAssetId: 'MELTED_GOLD',
-      priority: 'High'
+      priority: 'High',
+      priceUnit: 'IRR'
     });
   };
 
@@ -299,7 +302,8 @@ const ConnectorsTerminal = function ConnectorsTerminal({ connectors, setConnecto
       mappingVolume: conn.mappingVolume || 'volume',
       isActive: conn.isActive,
       targetAssetId: conn.targetAssetId,
-      priority: conn.priority || 'High'
+      priority: conn.priority || 'High',
+      priceUnit: connectorPriceUnit(conn)
     });
     setShowAddForm(true);
   };
@@ -465,6 +469,18 @@ const ConnectorsTerminal = function ConnectorsTerminal({ connectors, setConnecto
                 <option value="USDIRT">دلار آزاد</option>
                 <option value="USDTIRT">تتر ریالی</option>
                 <option value="XAUUSD">انس طلا جهانی</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-400 mb-1">واحد قیمتی که این منبع برمی‌گرداند</label>
+              <select
+                value={formData.priceUnit || connectorPriceUnit(formData)}
+                onChange={(e) => setFormData({ ...formData, priceUnit: e.target.value as APIConnector['priceUnit'] })}
+                className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white"
+              >
+                <option value="IRR">ریال (مثل TGJU و نوبیتکس)</option>
+                <option value="TOMAN">تومان (مثل کانال‌های تلگرامی و بن‌بست)</option>
+                <option value="USD">دلار (انس و بازار جهانی)</option>
               </select>
             </div>
 

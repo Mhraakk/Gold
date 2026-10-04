@@ -90,7 +90,7 @@ export default function Gold18ForecastPanel() {
               <span className="text-3xl font-mono font-bold text-white">
                 {forecast.centralEstimate.toLocaleString()}
               </span>
-              <span className="text-xs text-gray-500 mr-2">ریال / گرم</span>
+              <span className="text-xs text-gray-500 mr-2">تومان / گرم</span>
             </div>
             
             <div className="md:col-span-2 bg-black/30 rounded-xl p-5 border border-white/5 flex flex-col justify-center">
