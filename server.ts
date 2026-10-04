@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import OpenAI from "openai";
@@ -19,6 +20,18 @@ import {
   getCrossSourceValidation,
   getPriceHistory
 } from "./src/utils/sourceRegistry.ts";
+import {
+  MarketMemory,
+  type EngineContext,
+  type MarketKey,
+  type MarketQuote,
+  type MarketSnapshot,
+  answerChat,
+  buildDailyForecast,
+  buildMazanehForecast,
+  buildSharedAnalysis,
+  parseMarketText,
+} from "./src/services/localAnalyst.ts";
 
 // Load environment variables
 dotenv.config();
@@ -71,6 +84,27 @@ async function generateAiContent(opts: {
   return { text: response.choices[0]?.message?.content || "" };
 }
 
+// AI provider: "local" (built-in analyst, default, no API needed) or "openai".
+const AI_PROVIDER = (process.env.AI_PROVIDER || "local").toLowerCase();
+const useOpenAI = () => AI_PROVIDER === "openai" && !!process.env.OPENAI_API_KEY;
+
+// Runs the OpenAI path when enabled and falls back to the built-in analyst on
+// any failure (no credit, quota, network), so AI features never go dark.
+async function runAi<T>(label: string, local: () => Promise<T> | T, remote: () => Promise<T>): Promise<T> {
+  if (!useOpenAI()) return local();
+  try {
+    return await remote();
+  } catch (err: any) {
+    console.warn(`[AI] OpenAI ${label} failed, using built-in analyst: ${err.message}`);
+    return local();
+  }
+}
+
+async function requireAiBudget(userId: string, purpose: string, model: string, estimatedTokens: number) {
+  const budget = await consumeAiBudget(userId, purpose, model, estimatedTokens);
+  if (!budget.allowed) throw new Error("AI budget exhausted for today");
+}
+
 // Auth Middleware using Supabase
 async function consumeAiBudget(
   userId: string,
@@ -117,7 +151,8 @@ app.get("/api/system/health", (req, res) => {
     status: "ok", 
     time: new Date().toISOString(),
     supabaseConfigured: !!supabaseAdmin,
-    redisConfigured: !!redis
+    redisConfigured: !!redis,
+    aiProvider: useOpenAI() ? "openai" : "local"
   });
 });
 
@@ -147,15 +182,13 @@ app.post("/api/admin/invite-member", async (req, res) => {
 // TGJU Cache Logic
 const tgjuCache: Record<string, any> = {};
 
-app.get("/api/market/tgju/latest", async (req, res) => {
-  const assetKey = req.query.asset as string;
-  if (!assetKey) return res.status(400).json({ error: "Missing asset parameter" });
+async function fetchTgjuAsset(assetKey: string): Promise<any> {
   const assetConfig = tgjuAssets[assetKey];
-  if (!assetConfig) return res.status(404).json({ error: `Asset ${assetKey} not found` });
+  if (!assetConfig) throw new Error(`Asset ${assetKey} not found`);
 
   const now = Date.now();
   const cached = tgjuCache[assetKey];
-  if (cached && (now - cached.fetchedAt < 60000)) return res.json(cached);
+  if (cached && (now - cached.fetchedAt < 60000)) return cached;
 
   try {
     const response = await fetch(assetConfig.sourceUrl, {
@@ -174,11 +207,11 @@ app.get("/api/market/tgju/latest", async (req, res) => {
 
     let value = parseFloat(priceText.replace(/,/g, ''));
     if (assetKey === 'tether' && value < 1000) {
-       return res.json(cached || {
+       return cached || {
           value: 0, unit: assetConfig.expectedUnit, fetchedAt: now,
           source: "TGJU", sourceUrl: assetConfig.sourceUrl, freshness: "unavailable",
           error: "داده تتر ریالی از این منبع موجود نیست"
-       });
+       };
     }
     if (isNaN(value)) throw new Error("Parsed value is NaN");
 
@@ -189,21 +222,32 @@ app.get("/api/market/tgju/latest", async (req, res) => {
     };
 
     tgjuCache[assetKey] = result;
-    return res.json(result);
-  } catch (err: any) {
+    return result;
+  } catch (err) {
     if (cached) {
       cached.freshness = "stale";
       cached.ageSeconds = Math.floor((now - cached.fetchedAt) / 1000);
-      return res.json(cached);
+      return cached;
     }
-    return res.status(500).json({ error: err.message, freshness: "unavailable" });
+    throw err;
+  }
+}
+
+app.get("/api/market/tgju/latest", async (req, res) => {
+  const assetKey = req.query.asset as string;
+  if (!assetKey) return res.status(400).json({ error: "Missing asset parameter" });
+  if (!tgjuAssets[assetKey]) return res.status(404).json({ error: `Asset ${assetKey} not found` });
+  try {
+    res.json(await fetchTgjuAsset(assetKey));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message, freshness: "unavailable" });
   }
 });
 
-app.get("/api/market/abshdh", async (req, res) => {
+async function fetchAbshdh(): Promise<any> {
   const now = Date.now();
   const cached = tgjuCache['abshdh'];
-  if (cached && (now - cached.fetchedAt < 60000)) return res.json(cached);
+  if (cached && (now - cached.fetchedAt < 60000)) return cached;
   
   try {
     const response = await fetch('https://t.me/s/abshdh', {
@@ -246,15 +290,93 @@ app.get("/api/market/abshdh", async (req, res) => {
       source: "Telegram @abshdh"
     };
     tgjuCache['abshdh'] = { ...result, fetchedAt: now };
-    return res.json(result);
-  } catch (err: any) {
+    return result;
+  } catch (err) {
     if (cached) {
       cached.freshness = "stale";
-      return res.json(cached);
+      return cached;
     }
-    return res.status(500).json({ error: err.message });
+    throw err;
+  }
+}
+
+app.get("/api/market/abshdh", async (req, res) => {
+  try {
+    res.json(await fetchAbshdh());
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
+
+// --- BUILT-IN ANALYST: live market snapshot + persistent price memory ---
+
+const SNAPSHOT_TGJU_KEYS: [MarketKey, string][] = [
+  ["xauusd", "xauusd"], ["usd", "dollar_azad"], ["gold18", "gold_18k"], ["gold24", "gold_24k"],
+  ["mesghal", "mesghal"], ["emami", "emami"], ["nim", "nim_sekeh"], ["rob", "rob_sekeh"],
+  ["gerami", "gerami"], ["brent", "brent"],
+];
+const USD_QUOTED_KEYS = new Set<MarketKey>(["xauusd", "brent"]);
+const MARKET_HISTORY_FILE = path.join(process.cwd(), "data", "market-history.json");
+
+const marketMemory = new MarketMemory();
+try {
+  marketMemory.load(JSON.parse(fs.readFileSync(MARKET_HISTORY_FILE, "utf8")));
+} catch {
+  // No saved history yet.
+}
+
+let historySaveTimer: NodeJS.Timeout | null = null;
+function scheduleHistorySave() {
+  if (historySaveTimer) return;
+  historySaveTimer = setTimeout(() => {
+    historySaveTimer = null;
+    fs.mkdir(path.dirname(MARKET_HISTORY_FILE), { recursive: true }, () => {
+      fs.writeFile(MARKET_HISTORY_FILE, JSON.stringify(marketMemory.toJSON()), (err) => {
+        if (err) console.warn("[Analyst] Could not save market history:", err.message);
+      });
+    });
+  }, 60_000);
+  historySaveTimer.unref();
+}
+
+let lastMarketSnapshot: MarketSnapshot | null = null;
+async function getMarketSnapshot(): Promise<MarketSnapshot> {
+  if (lastMarketSnapshot && Date.now() - lastMarketSnapshot.takenAt < 30_000) return lastMarketSnapshot;
+  const quotes: Partial<Record<MarketKey, MarketQuote>> = {};
+  const crossChecks: Partial<Record<MarketKey, MarketQuote>> = {};
+  await Promise.all(SNAPSHOT_TGJU_KEYS.map(async ([key, tgjuKey]) => {
+    try {
+      const quote = await fetchTgjuAsset(tgjuKey);
+      if (!(quote?.value > 0) || quote.freshness === "unavailable") return;
+      // TGJU profile pages quote Iranian prices in Rial (verified against the
+      // Toman quotes of @abshdh), so convert them to Toman here.
+      quotes[key] = {
+        value: USD_QUOTED_KEYS.has(key) ? quote.value : quote.value / 10,
+        source: quote.freshness === "stale" ? "TGJU (آخرین داده ذخیره‌شده)" : "TGJU",
+        fetchedAt: quote.fetchedAt,
+      };
+    } catch {
+      // Source unavailable; the analyst reports missing data explicitly.
+    }
+  }));
+  try {
+    const abshdh = await fetchAbshdh();
+    const fetchedAt = abshdh.timestamp || abshdh.fetchedAt || Date.now();
+    if (abshdh?.data?.MELTED_GOLD > 0) crossChecks.mesghal = { value: abshdh.data.MELTED_GOLD, source: "Telegram @abshdh", fetchedAt };
+    if (abshdh?.data?.GOLD_18K > 0) crossChecks.gold18 = { value: abshdh.data.GOLD_18K, source: "Telegram @abshdh", fetchedAt };
+  } catch {
+    // Cross-check source unavailable.
+  }
+  const snapshot: MarketSnapshot = { quotes, crossChecks, takenAt: Date.now() };
+  marketMemory.record(snapshot);
+  scheduleHistorySave();
+  lastMarketSnapshot = snapshot;
+  return snapshot;
+}
+
+async function engineContext(): Promise<EngineContext> {
+  return { snapshot: await getMarketSnapshot(), memory: marketMemory };
+}
 
 // --- MARKET WALL & SOURCE REGISTRY ENDPOINTS ---
 
@@ -337,24 +459,35 @@ app.post("/api/sources/:sourceId/configure", (req, res) => {
   res.json({ success: true });
 });
 
-let memoryCache: { latest_analysis: any; forecasts: { [key: string]: any } } = {
+let memoryCache: { latest_analysis: any; analysisByAsset: { [assetId: string]: any }; forecasts: { [key: string]: any } } = {
   latest_analysis: null,
+  analysisByAsset: {},
   forecasts: {}
 };
 
+async function storeLatestAnalysis(analysisData: any) {
+  if (supabaseAdmin) {
+    await supabaseAdmin.from('analyses').insert([analysisData]);
+  } else if (redis) {
+    await redis.set("latest_analysis", JSON.stringify(analysisData));
+    if (analysisData?.assetId) await redis.set(`latest_analysis:${analysisData.assetId}`, JSON.stringify(analysisData));
+  } else {
+    memoryCache.latest_analysis = analysisData;
+    if (analysisData?.assetId) memoryCache.analysisByAsset[analysisData.assetId] = analysisData;
+  }
+}
+
 // Shared AI Analysis Endpoint
 app.post("/api/analysis/refresh", async (req, res) => {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "OpenAI API key not configured on server" });
-
-  const budgetCheck = await consumeAiBudget("owner", "shared-analysis", AI_PRIMARY_MODEL, parseInt(process.env.AI_RESERVED_SHARED_ANALYSIS_TOKENS || "1500", 10));
-  if (!budgetCheck.allowed) {
-    return res.status(429).json({ error: "سهمیه تحلیل هوش مصنوعی امروز استفاده شده است؛ آخرین تحلیل معتبر همچنان در دسترس است." });
-  }
-
   const { assetId, currentPrice } = req.body;
+  if (!assetId) return res.status(400).json({ error: "شناسه دارایی ارسال نشده است." });
 
-  const prompt = `شما استراتژیست ارشد کوانت هستید.
+  try {
+    const analysisData = await runAi("analysis",
+      async () => buildSharedAnalysis({ assetId, currentPrice: Number(currentPrice) || 0, ctx: await engineContext() }),
+      async () => {
+        await requireAiBudget("owner", "shared-analysis", AI_PRIMARY_MODEL, parseInt(process.env.AI_RESERVED_SHARED_ANALYSIS_TOKENS || "1500", 10));
+    const prompt = `شما استراتژیست ارشد کوانت هستید.
 اطلاعات بازار:
 - شناسه بازار: ${assetId}
 - قیمت فعلی: ${currentPrice} (دقت کنید: اگر بازار MELTED_GOLD است، این عدد ارزش ریالی یک مثقال آبشده است. برای مثال 79000000 یعنی 79 میلیون ریال یا 7 میلیون و 900 هزار تومان)
@@ -390,98 +523,94 @@ app.post("/api/analysis/refresh", async (req, res) => {
   },
   "detailedAnalysisMarkdown": "متن تحلیل عمیق مارک‌داون به زبان فارسی"
 }`;
-
-  try {
-    const response = await generateAiContent({
-      model: AI_PRIMARY_MODEL,
-      contents: prompt,
-      json: true
-    });
-
-    const analysisData = JSON.parse(response.text || "{}");
-    
-    if (supabaseAdmin) {
-      await supabaseAdmin.from('analyses').insert([analysisData]);
-    } else if (redis) {
-      await redis.set("latest_analysis", JSON.stringify(analysisData));
-    } else {
-      memoryCache.latest_analysis = analysisData;
-    }
-    
+        const response = await generateAiContent({ model: AI_PRIMARY_MODEL, contents: prompt, json: true });
+        return JSON.parse(response.text || "{}");
+      });
+    await storeLatestAnalysis(analysisData);
     res.json(analysisData);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
+// Built-in analyses are cheap, so they are regenerated once stale; OpenAI ones are kept to save budget.
+const LOCAL_ANALYSIS_MAX_AGE_MS = 15 * 60_000;
+
 app.get("/api/analysis/latest", async (req, res) => {
+  const assetId = typeof req.query.assetId === "string" ? req.query.assetId : undefined;
+  const usable = (a: any) => !!a && (!assetId || a.assetId === assetId) &&
+    (useOpenAI() || Date.now() - new Date(a.timestamp).getTime() < LOCAL_ANALYSIS_MAX_AGE_MS);
+
+  let analysis: any = null;
   if (supabaseClient) {
-    const { data, error } = await supabaseClient.from('analyses').select('*').order('timestamp', { ascending: false }).limit(1);
-    if (!error && data && data.length > 0) return res.json(data[0]);
+    let query = supabaseClient.from('analyses').select('*');
+    if (assetId) query = query.eq('assetId', assetId);
+    const { data, error } = await query.order('timestamp', { ascending: false }).limit(1);
+    if (!error && data && data.length > 0) analysis = data[0];
   } else if (redis) {
-    const analysis = await redis.get<string>("latest_analysis");
-    if (analysis) return res.json(typeof analysis === 'string' ? JSON.parse(analysis) : analysis);
-  } else if (memoryCache.latest_analysis) {
-    return res.json(memoryCache.latest_analysis);
+    const raw = await redis.get<string>(assetId ? `latest_analysis:${assetId}` : "latest_analysis");
+    if (raw) analysis = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  } else {
+    analysis = assetId ? memoryCache.analysisByAsset[assetId] : memoryCache.latest_analysis;
   }
+  if (usable(analysis)) return res.json(analysis);
   res.json({ timestamp: new Date().toISOString(), content: "در حال حاضر تحلیلی در دسترس نیست." });
 });
 
 // AI Chat
 app.post("/api/ai/chat", async (req, res) => {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "OpenAI API key not configured on server" });
-
-  const userId = req.ip || "public-user";
-  const budgetCheck = await consumeAiBudget(userId, "chat", AI_PRIMARY_MODEL, parseInt(process.env.AI_RESERVED_USER_CHAT_TOKENS || "1500", 10));
-  if (!budgetCheck.allowed) {
-    return res.status(429).json({ error: "سهمیه تحلیل هوش مصنوعی امروز استفاده شده است؛ آخرین تحلیل معتبر همچنان در دسترس است." });
-  }
-
   const { messages, marketContext } = req.body;
-  const contents = messages.map((m: any) => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }]
-  }));
+  if (!Array.isArray(messages) || messages.length === 0) return res.status(400).json({ error: "پیامی ارسال نشده است." });
+  const userId = req.ip || "public-user";
 
   try {
-    const response = await generateAiContent({
-      model: AI_PRIMARY_MODEL,
-      contents,
-      systemInstruction: `You are an expert Iranian gold market quantitative analyst. ALWAYS respond in Persian.
+    const content = await runAi("chat",
+      async () => answerChat({ messages, marketContext, ctx: await engineContext() }),
+      async () => {
+        await requireAiBudget(userId, "chat", AI_PRIMARY_MODEL, parseInt(process.env.AI_RESERVED_USER_CHAT_TOKENS || "1500", 10));
+        const contents = messages.map((m: any) => ({
+          role: m.role === "assistant" ? "model" : "user",
+          parts: [{ text: m.content }]
+        }));
+        const response = await generateAiContent({
+          model: AI_PRIMARY_MODEL,
+          contents,
+          systemInstruction: `You are an expert Iranian gold market quantitative analyst. ALWAYS respond in Persian.
 Current Market Context (For your reference):
 ${marketContext ? `Asset: ${marketContext.assetId}
 Price: ${marketContext.currentPrice} (Note: For MELTED_GOLD, this is strictly Iranian Rial per Mesghal, e.g., 79600000 = 79.6M IRR. For USD/Coins, it is Toman.)
 Supports: ${marketContext.supports?.join(', ')}
 Resistances: ${marketContext.resistances?.join(', ')}` : 'None provided.'}`
-    });
-    res.json({ role: "assistant", content: response.text });
+        });
+        return response.text;
+      });
+    res.json({ role: "assistant", content });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
 app.post("/api/forecast/parse", async (req, res) => {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "OpenAI API key not configured on server" });
-  
+  const text = String(req.body?.text || "");
   const userId = req.ip || "public-user";
-  const budgetCheck = await consumeAiBudget(userId, "parse", AI_PRIMARY_MODEL, 100);
-  if (!budgetCheck.allowed) return res.status(429).json({ error: "سهمیه تحلیل هوش مصنوعی تمام شده است." });
 
   try {
-    const response = await generateAiContent({
-      model: AI_PRIMARY_MODEL,
-      contents: `Extract numerical values from this Persian text as JSON with keys: meltedGold, usdIrt, xauusd, usdtIrt, gold18k, emamiCoin. Text: ${req.body.text}`,
-      json: true
-    });
-    res.json(JSON.parse(response.text || "{}"));
+    const parsed = await runAi("parse",
+      () => parseMarketText(text),
+      async () => {
+        await requireAiBudget(userId, "parse", AI_PRIMARY_MODEL, 100);
+        const response = await generateAiContent({
+          model: AI_PRIMARY_MODEL,
+          contents: `Extract numerical values from this Persian text as JSON with keys: meltedGold, usdIrt, xauusd, usdtIrt, gold18k, emamiCoin. Text: ${text}`,
+          json: true
+        });
+        return JSON.parse(response.text || "{}");
+      });
+    res.json(parsed);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
-
-
 
 app.post("/api/forecast/analyze", async (req, res) => {
   try {
@@ -517,16 +646,11 @@ app.post("/api/forecast/analyze", async (req, res) => {
       return res.status(400).json({ error: "مبلغ دلار نامعتبر است." });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return res.status(500).json({ error: "OpenAI API key not configured on server" });
-
-    // Optional: budget check
-    const budgetCheck = await consumeAiBudget("owner", "forecast", AI_DEEP_MODEL, parseInt(process.env.AI_RESERVED_DEEP_FORECAST_TOKENS || "3000", 10));
-    if (!budgetCheck.allowed) {
-      return res.status(429).json({ error: "سهمیه تحلیل عمیق هوش مصنوعی فعلاً در دسترس نیست." });
-    }
-
-    const prompt = `Analyze night-time closing data for Iranian Melted Gold and predict tomorrow's market behavior based on this verified market snapshot.
+    const forecastData = await runAi("mazaneh-forecast",
+      async () => buildMazanehForecast({ fields, snapshotId: marketSnapshotId || "manual", ctx: await engineContext() }),
+      async () => {
+        await requireAiBudget("owner", "forecast", AI_DEEP_MODEL, parseInt(process.env.AI_RESERVED_DEEP_FORECAST_TOKENS || "3000", 10));
+        const prompt = `Analyze night-time closing data for Iranian Melted Gold and predict tomorrow's market behavior based on this verified market snapshot.
 Data: ${JSON.stringify(fields)}
 
 You MUST return a JSON object with EXACTLY the following structure. Do not include markdown formatting or extra text outside the JSON.
@@ -559,14 +683,11 @@ You MUST return a JSON object with EXACTLY the following structure. Do not inclu
   "warnings": []
 }`;
 
-    const response = await generateAiContent({
-      model: AI_DEEP_MODEL,
-      contents: prompt,
-      json: true
-    });
-    
-    const forecastData = JSON.parse(response.text || "{}");
-    forecastData.success = true;
+        const response = await generateAiContent({ model: AI_DEEP_MODEL, contents: prompt, json: true });
+        const data = JSON.parse(response.text || "{}");
+        data.success = true;
+        return data;
+      });
     res.json(forecastData);
   } catch (err: any) {
     console.error("Analysis error:", err);
@@ -777,43 +898,40 @@ app.post("/api/forecast/autofill", async (req, res) => {
 });
 
 app.post("/api/forecast/generate", async (req, res) => {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "OpenAI API key not configured on server" });
-  
-  // Check if we already have a forecast for today
+  const input = req.body?.input;
+  if (!input || !(Number(input.meltedGold) > 0)) return res.status(400).json({ error: "قیمت آبشده (مظنه) وارد نشده است." });
+
+  // The once-per-day cache only applies to OpenAI (to save budget); the built-in
+  // analyst recomputes for every new input.
   const today = new Date().toISOString().split("T")[0];
-  if (redis) {
-    const cachedForecast = await redis.get("forecast:" + today);
-    if (cachedForecast) {
-        return res.json(typeof cachedForecast === 'string' ? JSON.parse(cachedForecast) : cachedForecast);
+  if (useOpenAI()) {
+    if (redis) {
+      const cachedForecast = await redis.get("forecast:" + today);
+      if (cachedForecast) {
+          return res.json(typeof cachedForecast === 'string' ? JSON.parse(cachedForecast) : cachedForecast);
+      }
+    } else if (memoryCache.forecasts[today]) {
+      return res.json(memoryCache.forecasts[today]);
     }
-  } else if (memoryCache.forecasts[today]) {
-    return res.json(memoryCache.forecasts[today]);
   }
 
-  // We charge the "owner" budget so it is global
-  const budgetCheck = await consumeAiBudget("owner", "forecast", AI_DEEP_MODEL, parseInt(process.env.AI_RESERVED_DEEP_FORECAST_TOKENS || "3000", 10));
-  if (!budgetCheck.allowed) return res.status(429).json({ error: "سهمیه تحلیل عمیق هوش مصنوعی تمام شده است." });
-
   try {
-    const prompt = `Analyze night-time closing data for Iranian Melted Gold and predict tomorrow's market behavior. Note: Price values for Melted Gold are strictly in Iranian Rials (IRR) per Mesghal (e.g., 79,600,000 means 79.6 Million Rial). USD and Coin values are in Toman. Do not scale or divide values, preserve the exact digits. Return JSON with closePrice, rangeLow, rangeHigh, midPoint, bullishProb, neutralProb, bearishProb, primaryScenario, bullishScenario, bearishScenario, impacts (usd, usdt, xauusd, coin, trend, news), levels (sup1, sup2, res1, res2, invalidation), confidenceString, confidenceScore. Data: ${JSON.stringify(req.body.input)}`;
-    
-    const response = await generateAiContent({
-      model: AI_DEEP_MODEL,
-      contents: prompt,
-      json: true
-    });
-    
-    const forecastData = JSON.parse(response.text || "{}");
-    
-    if (redis) {
-      await redis.set("forecast:" + today, JSON.stringify(forecastData));
-      // Optionally expire after 24h
-      await redis.expire("forecast:" + today, 86400);
-    } else {
-      memoryCache.forecasts[today] = forecastData;
-    }
-    
+    const forecastData = await runAi("daily-forecast",
+      async () => buildDailyForecast({ input, ctx: await engineContext() }),
+      async () => {
+        // We charge the "owner" budget so it is global
+        await requireAiBudget("owner", "forecast", AI_DEEP_MODEL, parseInt(process.env.AI_RESERVED_DEEP_FORECAST_TOKENS || "3000", 10));
+        const prompt = `Analyze night-time closing data for Iranian Melted Gold and predict tomorrow's market behavior. Note: Price values for Melted Gold are strictly in Iranian Rials (IRR) per Mesghal (e.g., 79,600,000 means 79.6 Million Rial). USD and Coin values are in Toman. Do not scale or divide values, preserve the exact digits. Return JSON with closePrice, rangeLow, rangeHigh, midPoint, bullishProb, neutralProb, bearishProb, primaryScenario, bullishScenario, bearishScenario, impacts (usd, usdt, xauusd, coin, trend, news), levels (sup1, sup2, res1, res2, invalidation), confidenceString, confidenceScore. Data: ${JSON.stringify(req.body.input)}`;
+        const response = await generateAiContent({ model: AI_DEEP_MODEL, contents: prompt, json: true });
+        const data = JSON.parse(response.text || "{}");
+        if (redis) {
+          await redis.set("forecast:" + today, JSON.stringify(data));
+          await redis.expire("forecast:" + today, 86400);
+        } else {
+          memoryCache.forecasts[today] = data;
+        }
+        return data;
+      });
     res.json(forecastData);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -930,7 +1048,12 @@ async function initServer() {
   }
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[Gold Terminal Server] running on http://localhost:${PORT}`);
+    console.log(`[Analyst] AI provider: ${useOpenAI() ? `OpenAI (${AI_PRIMARY_MODEL}) with built-in fallback` : "built-in analyst (no external API)"}`);
   });
+
+  // Keep the analyst's market memory growing even when nobody is asking.
+  getMarketSnapshot().catch(() => {});
+  setInterval(() => { getMarketSnapshot().catch(() => {}); }, 120_000).unref();
 }
 
 initServer();

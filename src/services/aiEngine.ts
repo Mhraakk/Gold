@@ -158,7 +158,7 @@ export function calculateRuleBasedConfidence(
   return { confidenceScore, probabilityScore };
 }
 
-// 3. Multi-Model AI analysis Orchestrator linking technical, structural arrays, and live assets to Server-side OpenAI
+// 3. Multi-Model AI analysis Orchestrator linking technical, structural arrays, and live assets to the server-side analyst
 export async function triggerAIAnalysis(
   assetId: AssetId,
   candles: Candle[],
@@ -167,7 +167,7 @@ export async function triggerAIAnalysis(
   telegramPrice?: number
 ): Promise<AnalysisResponse> {
   try {
-    let res = await fetch("/api/analysis/latest");
+    let res = await fetch(`/api/analysis/latest?assetId=${encodeURIComponent(assetId)}`);
     let data = await res.json();
     
     // If no analysis is available or it's a placeholder, try to refresh it

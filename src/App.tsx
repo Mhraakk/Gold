@@ -164,6 +164,15 @@ const DEFAULT_MARKET_STRUCTURE: MarketStructure = {
   resistanceLines: [],
 };
 
+// Renders **bold** spans inside one line of the analysis markdown.
+function renderInlineBold(text: string) {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.length > 4 && part.startsWith("**") && part.endsWith("**")
+      ? <strong key={i} className="text-white font-semibold">{part.slice(2, -2)}</strong>
+      : part,
+  );
+}
+
 export default function App() {
   const { theme, toggleTheme } = useTheme();
 
@@ -286,9 +295,9 @@ export default function App() {
       }
     }
     return {
-      provider: "openai",
+      provider: "custom",
       apiKeys_REMOVED: {},
-      model: "gpt-4o-mini",
+      model: "local-analyst",
       temperature: 0.15,
       systemPrompt: `You are the Gold Terminal Principal Quant, Geopolitical Strategist & Institutional AI Decision Engine.
 Your analysis must be flawless, reasoning-first, and highly mathematical.
@@ -2474,7 +2483,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                         key={idx}
                                         className="list-disc pl-5 space-y-1 text-gray-300"
                                       >
-                                        <li>{line.substring(2)}</li>
+                                        <li>{renderInlineBold(line.substring(2))}</li>
                                       </ul>
                                     );
                                   }
@@ -2484,7 +2493,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                         key={idx}
                                         className="border-l-2 border-amber-500 pl-3 py-1 my-2 bg-[var(--accent-gold)]/5 text-gray-400 italic"
                                       >
-                                        {line.replace("> ", "")}
+                                        {renderInlineBold(line.replace("> ", ""))}
                                       </blockquote>
                                     );
                                   }
@@ -2493,7 +2502,7 @@ Never just list indicators. Think critically, reason deeply, and act like a bill
                                       key={idx}
                                       className="text-gray-300 text-[11px] leading-relaxed"
                                     >
-                                      {line}
+                                      {renderInlineBold(line)}
                                     </p>
                                   );
                                 })}

@@ -7,6 +7,8 @@ export interface TgjuAssetConfig {
   parser: "profilePageParser";
 }
 
+// TGJU profile pages quote Iranian prices in Rial (cross-checked against the
+// Toman quotes of the @abshdh market channel: exactly 10x).
 export const tgjuAssets: Record<string, TgjuAssetConfig> = {
   xauusd: {
     key: "xauusd",
@@ -21,7 +23,7 @@ export const tgjuAssets: Record<string, TgjuAssetConfig> = {
     labelFa: "دلار آزاد",
     sourceName: "TGJU",
     sourceUrl: "https://www.tgju.org/profile/price_dollar_rl",
-    expectedUnit: "IRT",
+    expectedUnit: "IRR",
     parser: "profilePageParser"
   },
   gold_18k: {
@@ -29,7 +31,7 @@ export const tgjuAssets: Record<string, TgjuAssetConfig> = {
     labelFa: "طلای ۱۸ عیار",
     sourceName: "TGJU",
     sourceUrl: "https://www.tgju.org/profile/geram18",
-    expectedUnit: "IRT per gram",
+    expectedUnit: "IRR per gram",
     parser: "profilePageParser"
   },
   gold_24k: {
@@ -37,7 +39,7 @@ export const tgjuAssets: Record<string, TgjuAssetConfig> = {
     labelFa: "طلای ۲۴ عیار",
     sourceName: "TGJU",
     sourceUrl: "https://www.tgju.org/profile/geram24",
-    expectedUnit: "IRT per gram",
+    expectedUnit: "IRR per gram",
     parser: "profilePageParser"
   },
   mesghal: {
@@ -45,7 +47,7 @@ export const tgjuAssets: Record<string, TgjuAssetConfig> = {
     labelFa: "مثقال طلا",
     sourceName: "TGJU",
     sourceUrl: "https://www.tgju.org/profile/mesghal",
-    expectedUnit: "IRT",
+    expectedUnit: "IRR",
     parser: "profilePageParser"
   },
   abshodeh_naghdi: {
@@ -53,7 +55,7 @@ export const tgjuAssets: Record<string, TgjuAssetConfig> = {
     labelFa: "آبشده نقدی",
     sourceName: "TGJU",
     sourceUrl: "https://www.tgju.org/profile/mesghal",
-    expectedUnit: "IRT",
+    expectedUnit: "IRR",
     parser: "profilePageParser"
   },
   emami: {
@@ -61,7 +63,7 @@ export const tgjuAssets: Record<string, TgjuAssetConfig> = {
     labelFa: "سکه امامی",
     sourceName: "TGJU",
     sourceUrl: "https://www.tgju.org/profile/sekee",
-    expectedUnit: "IRT",
+    expectedUnit: "IRR",
     parser: "profilePageParser"
   },
   nim_sekeh: {
@@ -69,7 +71,7 @@ export const tgjuAssets: Record<string, TgjuAssetConfig> = {
     labelFa: "نیم سکه",
     sourceName: "TGJU",
     sourceUrl: "https://www.tgju.org/profile/nim",
-    expectedUnit: "IRT",
+    expectedUnit: "IRR",
     parser: "profilePageParser"
   },
   rob_sekeh: {
@@ -77,7 +79,7 @@ export const tgjuAssets: Record<string, TgjuAssetConfig> = {
     labelFa: "ربع سکه",
     sourceName: "TGJU",
     sourceUrl: "https://www.tgju.org/profile/rob",
-    expectedUnit: "IRT",
+    expectedUnit: "IRR",
     parser: "profilePageParser"
   },
   gerami: {
@@ -85,7 +87,7 @@ export const tgjuAssets: Record<string, TgjuAssetConfig> = {
     labelFa: "سکه گرمی",
     sourceName: "TGJU",
     sourceUrl: "https://www.tgju.org/profile/gerami",
-    expectedUnit: "IRT",
+    expectedUnit: "IRR",
     parser: "profilePageParser"
   },
   brent: {
